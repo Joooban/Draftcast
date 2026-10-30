@@ -7,7 +7,7 @@ import time
 from urllib.parse import quote
 
 from lolwp.config import ACCOUNT_ROUTING, MATCH_WINDOW_DAYS, QUEUE_ID, SEED, Settings, load_settings
-from lolwp.riot.client import KeyExpiredError, RiotClient
+from lolwp.riot.client import KeyExpiredError, RiotClient, TransientError
 from lolwp.riot.store import Store
 
 DIVISIONS = ["I", "II", "III", "IV"]
@@ -52,9 +52,13 @@ def seed(client, store: Store, settings: Settings) -> int:
         for tier, divisions, pages in SEED_TIERS:
             for division in divisions:
                 for page in pages:
-                    entries = client.get(
-                        f"{_platform(settings)}/lol/league/v4/entries/RANKED_SOLO_5x5/{tier}/{division}",
-                        {"page": page}) or []
+                    try:
+                        entries = client.get(
+                            f"{_platform(settings)}/lol/league/v4/entries/RANKED_SOLO_5x5/{tier}/{division}",
+                            {"page": page}) or []
+                    except TransientError as e:
+                        print(f"Skipped {tier} {division} p{page} ({e}); rerun seed to retry")
+                        continue
                     rows = [(e["puuid"], tier, division) for e in entries if e.get("puuid")]
                     n = store.add_players(rows)
                     added += n
@@ -71,7 +75,11 @@ def collect_ids(client, store: Store, settings: Settings, limit: int, per_player
     added = 0
     try:
         for i, puuid in enumerate(store.players_todo(limit), 1):
-            ids = client.get(f"{_regional(settings)}/lol/match/v5/matches/by-puuid/{puuid}/ids", params) or []
+            try:
+                ids = client.get(f"{_regional(settings)}/lol/match/v5/matches/by-puuid/{puuid}/ids", params) or []
+            except TransientError as e:
+                print(f"Skipped player {puuid[:8]}… for now ({e}); a rerun will retry it")
+                continue
             added += store.add_match_ids(ids)
             store.mark_player_done(puuid)
             if i % 50 == 0:
@@ -85,7 +93,11 @@ def collect_details(client, store: Store, settings: Settings, limit: int) -> int
     saved = 0
     try:
         for i, match_id in enumerate(store.details_todo(limit), 1):
-            match = client.get(f"{_regional(settings)}/lol/match/v5/matches/{match_id}")
+            try:
+                match = client.get(f"{_regional(settings)}/lol/match/v5/matches/{match_id}")
+            except TransientError as e:
+                print(f"Skipped {match_id} for now ({e}); a rerun will retry it")
+                continue
             store.save_details(match_id, match)
             saved += match is not None
             if i % 100 == 0:
@@ -99,7 +111,11 @@ def collect_timelines(client, store: Store, settings: Settings, limit: int) -> i
     saved = 0
     try:
         for i, match_id in enumerate(store.timelines_todo(limit, seed=SEED), 1):
-            timeline = client.get(f"{_regional(settings)}/lol/match/v5/matches/{match_id}/timeline")
+            try:
+                timeline = client.get(f"{_regional(settings)}/lol/match/v5/matches/{match_id}/timeline")
+            except TransientError as e:
+                print(f"Skipped {match_id} for now ({e}); a rerun will retry it")
+                continue
             store.save_timeline(match_id, timeline)
             saved += timeline is not None
             if i % 100 == 0:

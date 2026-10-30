@@ -12,6 +12,10 @@ class KeyExpiredError(Exception):
     """Raised on 401/403: the dev key is missing, wrong, or expired."""
 
 
+class TransientError(Exception):
+    """Raised when 5xx or network errors outlast every retry; the request may succeed later."""
+
+
 class RiotClient:
     def __init__(self, api_key: str, session=None, sleep=time.sleep, clock=time.monotonic,
                  min_interval: float = MIN_INTERVAL_S):
@@ -33,7 +37,13 @@ class RiotClient:
         attempt = 0
         while attempt < MAX_ATTEMPTS:
             self._wait_turn()
-            resp = self.session.get(url, params=params, timeout=30)
+            try:
+                resp = self.session.get(url, params=params, timeout=30)
+            except requests.RequestException:
+                attempt += 1
+                if attempt < MAX_ATTEMPTS:
+                    self.sleep(5 * attempt)
+                continue
             code = resp.status_code
             if code == 200:
                 return resp.json()
@@ -50,4 +60,4 @@ class RiotClient:
                 continue
             if code < 500:
                 return None
-        return None
+        raise TransientError(f"gave up on {url} after {MAX_ATTEMPTS} attempts")

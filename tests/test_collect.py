@@ -86,3 +86,59 @@ def test_collect_timelines_uses_timeline_url(tmp_path):
     assert collect.collect_timelines(client, store, s, limit=10) == 1
     assert client.calls[0][0] == "https://sea.api.riotgames.com/lol/match/v5/matches/SG2_1/timeline"
     assert store.counts()["timelines"] == 1
+
+
+def test_transient_failure_leaves_match_unfetched(tmp_path):
+    from lolwp.riot.client import TransientError
+    s = settings(tmp_path)
+    store = Store(s.db_path)
+    store.add_match_ids(["SG2_0", "SG2_1", "SG2_2"])
+
+    def route(url, params):
+        if url.endswith("SG2_1"):
+            raise TransientError("503 x5")
+        return {"info": {"gameDuration": 1800}}
+
+    assert collect.collect_details(FakeClient(route), store, s, limit=100) == 2
+    assert store.details_todo(10) == ["SG2_1"]  # retried on the next run, not lost
+
+
+def test_transient_timeline_failure_leaves_unfetched(tmp_path):
+    from lolwp.riot.client import TransientError
+    s = settings(tmp_path)
+    store = Store(s.db_path)
+    store.save_details("SG2_1", {"info": {"gameDuration": 1800}})
+
+    def route(url, params):
+        raise TransientError("503 x5")
+
+    assert collect.collect_timelines(FakeClient(route), store, s, limit=10) == 0
+    assert store.timelines_todo(10, seed=42) == ["SG2_1"]
+
+
+def test_transient_ids_failure_leaves_player_todo(tmp_path):
+    from lolwp.riot.client import TransientError
+    s = settings(tmp_path)
+    store = Store(s.db_path)
+    store.add_players([("p1", "EMERALD", "I"), ("p2", "EMERALD", "I")])
+
+    def route(url, params):
+        if "/p1/" in url:
+            raise TransientError("503 x5")
+        return ["SG2_9"]
+
+    assert collect.collect_ids(FakeClient(route), store, s, limit=10) == 1
+    assert store.players_todo(10) == ["p1"]
+
+
+def test_transient_seed_page_skipped(tmp_path):
+    from lolwp.riot.client import TransientError
+    s = settings(tmp_path)
+    store = Store(s.db_path)
+
+    def route(url, params):
+        if "/EMERALD/I" in url and params.get("page") == 1:
+            raise TransientError("503 x5")
+        return [{"puuid": "a"}] if "/CHALLENGER/" in url else []
+
+    assert collect.seed(FakeClient(route), store, s) == 1

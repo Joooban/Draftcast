@@ -60,12 +60,6 @@ def test_429_sleeps_retry_after_then_succeeds():
     assert 7 in sleep.sleeps
 
 
-def test_500_retries_then_gives_up_after_5():
-    client, session, _ = make([FakeResponse(500) for _ in range(5)])
-    assert client.get("u") is None
-    assert len(session.calls) == 5
-
-
 def test_spacing_between_calls():
     client, _, sleep = make([FakeResponse(200, {}), FakeResponse(200, {})])
     client.get("a")
@@ -77,3 +71,27 @@ def test_spacing_between_calls():
 def test_sends_token_header():
     _, session, _ = make([])
     assert session.headers["X-Riot-Token"] == "RGAPI-x"
+
+
+def test_500_exhausted_raises_transient_not_none():
+    from lolwp.riot.client import TransientError
+    client, session, _ = make([FakeResponse(500) for _ in range(5)])
+    with pytest.raises(TransientError):
+        client.get("u")
+    assert len(session.calls) == 5
+
+
+def test_connection_error_retried_then_transient():
+    import requests
+    from lolwp.riot.client import TransientError
+
+    class Flaky(FakeSession):
+        def get(self, url, params=None, timeout=None):
+            self.calls.append((url, params))
+            raise requests.ConnectionError("wifi blip")
+
+    session = Flaky([])
+    client = RiotClient("k", session=session, sleep=Recorder(), clock=lambda: 0.0)
+    with pytest.raises(TransientError):
+        client.get("u")
+    assert len(session.calls) == 5
