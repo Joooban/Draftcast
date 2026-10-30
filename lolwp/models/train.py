@@ -15,9 +15,12 @@ from sklearn.model_selection import StratifiedKFold, cross_val_predict, cross_va
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
-from lolwp.config import OOF_FOLDS, SEED, STATE_FEATURES, load_settings
-from lolwp.features.draft import DRAFT_FEATURES
-from lolwp.features.parse import patch_key
+from lolwp import champions
+from lolwp.champions import Champion
+from lolwp.config import OOF_FOLDS, ROLES, SEED, STATE_FEATURES, load_settings
+from lolwp.features.draft import DRAFT_FEATURES, draft_features
+from lolwp.features.draft_stats import DraftStats, oof_stats
+from lolwp.features.parse import MatchRecord, patch_key
 
 COMBINED_FEATURES = ["draft_logit", *STATE_FEATURES]
 LGBM_PARAMS = dict(n_estimators=300, learning_rate=0.05, num_leaves=15, random_state=SEED, verbose=-1)
@@ -55,6 +58,43 @@ def evaluate(model, X_train, y_train, X_test, y_test) -> tuple[object, dict]:
     m = scores(y_test, model.predict_proba(X_test)[:, 1])
     m |= {"cv_auc_mean": float(cv.mean()), "cv_auc_std": float(cv.std())}
     return model, m
+
+
+def records_from_frame(frame: pd.DataFrame) -> list[MatchRecord]:
+    return [MatchRecord(row.match_id, row.patch, int(row.blue_win), 0,
+                        {r: int(getattr(row, f"blue_{r}")) for r in ROLES},
+                        {r: int(getattr(row, f"red_{r}")) for r in ROLES})
+            for row in frame.itertuples(index=False)]
+
+
+def drift_frames(draft: pd.DataFrame, state: pd.DataFrame,
+                 champs: dict[int, Champion]) -> tuple[pd.DataFrame, pd.DataFrame] | None:
+    """Rebuild draft features as if the newest two patches were both unseen.
+
+    The saved features give second-newest-patch rows stats that include their own patch, which
+    would flatter that patch and overstate drift. Here older rows get out-of-fold stats from the
+    older patches only, and both evaluation patches get stats fitted on the older patches.
+    """
+    patches = sorted(draft.patch.unique(), key=patch_key)
+    if len(patches) < 3:
+        return None
+    evaluated = draft.patch.isin(patches[-2:])
+    old_recs = records_from_frame(draft[~evaluated])
+    oof, full = oof_stats(old_recs), DraftStats.fit(old_recs)
+    rows = []
+    for rec, is_eval in zip(records_from_frame(draft), evaluated):
+        rows.append(draft_features(rec.blue, rec.red, full if is_eval else oof[rec.match_id], champs))
+    d = draft.copy()
+    d[DRAFT_FEATURES] = pd.DataFrame(rows, index=draft.index)[DRAFT_FEATURES]
+
+    old = d[~evaluated]
+    oof_logit = cross_val_predict(make_lr(), old[DRAFT_FEATURES], old.blue_win, cv=_cv(),
+                                  method="decision_function")
+    model = make_lr().fit(old[DRAFT_FEATURES], old.blue_win)
+    new = d[evaluated]
+    logit = pd.concat([pd.Series(oof_logit, index=old.match_id),
+                       pd.Series(model.decision_function(new[DRAFT_FEATURES]), index=new.match_id)])
+    return d, state.assign(draft_logit=state.match_id.map(logit).to_numpy())
 
 
 def drift_check(frame: pd.DataFrame, features: list[str]) -> dict | None:
@@ -109,15 +149,17 @@ def train(data_dir: str, artifacts_dir: str) -> dict:
     for name, model in (("draft", draft_lr), ("state", state_lr), ("combined", combined_lr)):
         joblib.dump(model, os.path.join(artifacts_dir, f"{name}_model.joblib"))
 
+    drift = drift_frames(draft, state, champions.load(os.path.join(artifacts_dir, "champions.json")))
+    drift_draft, drift_combined = drift if drift else (draft, combined)
     metrics = {
         "models": models,
         "test_patch": str(d_te.patch.iloc[0]) if len(d_te) else None,
         "n_train": {"draft": len(d_tr), "state": len(s_tr)},
         "n_test": {"draft": len(d_te), "state": len(s_te)},
         "prev_patch_auc": {
-            "draft_lr": drift_check(draft, DRAFT_FEATURES),
+            "draft_lr": drift_check(drift_draft, DRAFT_FEATURES),
             "state_lr": drift_check(state, STATE_FEATURES),
-            "combined_lr": drift_check(combined, COMBINED_FEATURES),
+            "combined_lr": drift_check(drift_combined, COMBINED_FEATURES),
         },
     }
     with open(os.path.join(artifacts_dir, "metrics.json"), "w") as f:

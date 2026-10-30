@@ -3,6 +3,7 @@ import os
 
 import joblib
 import numpy as np
+import pytest
 import pandas as pd
 
 from lolwp import champions
@@ -68,3 +69,25 @@ def test_synthetic_signal_is_learned(synthetic_dirs):
     m = json.load(open(os.path.join(synthetic_dirs.artifacts_dir, "metrics.json")))["models"]
     assert m["state_lr"]["auc"] > 0.7
     assert m["combined_lr"]["auc"] >= m["state_lr"]["auc"] - 0.02
+
+
+def test_drift_features_use_only_older_patches(synthetic_dirs):
+    from lolwp.features.parse import patch_key
+    from lolwp.models.train import COMBINED_FEATURES, drift_frames, records_from_frame
+
+    draft = pd.read_parquet(os.path.join(synthetic_dirs.data_dir, "draft.parquet"))
+    state = pd.read_parquet(os.path.join(synthetic_dirs.data_dir, "state.parquet"))
+    champs = champions.load(os.path.join(synthetic_dirs.artifacts_dir, "champions.json"))
+    d, c = drift_frames(draft, state, champs)
+
+    patches = sorted(draft.patch.unique(), key=patch_key)
+    old = draft[~draft.patch.isin(patches[-2:])]
+    stats = DraftStats.fit(records_from_frame(old))
+    for patch in patches[-2:]:
+        row = d[d.patch == patch].iloc[0]
+        blue = {r: int(row[f"blue_{r}"]) for r in ROLES}
+        red = {r: int(row[f"red_{r}"]) for r in ROLES}
+        expected = draft_features(blue, red, stats, champs)
+        assert [row[k] for k in DRAFT_FEATURES] == pytest.approx([expected[k] for k in DRAFT_FEATURES])
+    assert len(c) == len(state) and set(COMBINED_FEATURES) <= set(c.columns)
+    assert not c.draft_logit.isna().any()
