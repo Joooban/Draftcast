@@ -1,11 +1,13 @@
 """FastAPI app: prediction API (and, once built, the React frontend)."""
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from lolwp.api.predictor import Predictor, ValidationError
 from lolwp.api.schemas import PredictRequest, PredictResponse
-from lolwp.config import load_settings
+from lolwp.config import ROOT, load_settings
 
 
 def _readable(exc: RequestValidationError) -> str:
@@ -16,7 +18,7 @@ def _readable(exc: RequestValidationError) -> str:
     return "; ".join(parts)
 
 
-def create_app(artifacts_dir: str | None = None) -> FastAPI:
+def create_app(artifacts_dir: str | None = None, web_dir: str | None = None) -> FastAPI:
     artifacts_dir = artifacts_dir or load_settings().artifacts_dir
     app = FastAPI(title="LoL Win Predictor")
     try:
@@ -55,7 +57,25 @@ def create_app(artifacts_dir: str | None = None) -> FastAPI:
         except FileNotFoundError:
             raise HTTPException(503, "Insights haven't been computed yet.")
 
+    _mount_frontend(app, Path(web_dir) if web_dir else ROOT / "web" / "dist")
     return app
+
+
+def _mount_frontend(app: FastAPI, dist: Path) -> None:
+    """Serve the built React app: real files as-is, any other non-API path gets index.html."""
+    index = dist / "index.html"
+    if not index.exists():
+        return
+    root = dist.resolve()
+
+    @app.get("/{path:path}", include_in_schema=False)
+    def frontend(path: str):
+        if path == "api" or path.startswith("api/"):
+            raise HTTPException(404, "Not found")
+        target = (root / path).resolve()
+        if path and target.is_file() and target.is_relative_to(root):
+            return FileResponse(target)
+        return FileResponse(index)
 
 
 app = create_app()

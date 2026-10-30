@@ -127,3 +127,41 @@ def test_missing_artifacts_returns_503(tmp_path):
     c = TestClient(create_app(str(tmp_path)))
     assert c.get("/api/health").json()["models_loaded"] is False
     assert c.get("/api/champions").status_code == 503
+
+
+@pytest.fixture
+def web_client(tmp_path, synthetic_dirs):
+    dist = tmp_path / "dist"
+    (dist / "assets").mkdir(parents=True)
+    (dist / "index.html").write_text("<!doctype html><div id=root></div>")
+    (dist / "assets" / "app.js").write_text("console.log(1)")
+    (dist / "favicon.svg").write_text("<svg/>")
+    (tmp_path / "secret.txt").write_text("nope")
+    return TestClient(create_app(synthetic_dirs.artifacts_dir, web_dir=str(dist)))
+
+
+def test_root_serves_index(web_client):
+    r = web_client.get("/")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/html")
+    assert "id=root" in r.text
+
+
+def test_spa_fallback_for_client_routes(web_client):
+    r = web_client.get("/insights")
+    assert r.status_code == 200 and "id=root" in r.text
+
+
+def test_static_files_served(web_client):
+    assert web_client.get("/assets/app.js").text == "console.log(1)"
+    assert web_client.get("/favicon.svg").text == "<svg/>"
+
+
+def test_api_still_json_with_frontend(web_client):
+    r = web_client.get("/api/health")
+    assert r.headers["content-type"].startswith("application/json")
+    assert web_client.get("/api/nope").status_code == 404
+
+
+def test_no_path_traversal(web_client):
+    r = web_client.get("/..%2Fsecret.txt")
+    assert "nope" not in r.text
