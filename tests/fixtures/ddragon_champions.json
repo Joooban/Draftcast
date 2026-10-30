@@ -1,0 +1,13 @@
+{
+  "type": "champion",
+  "format": "standAloneComplex",
+  "version": "15.21.1",
+  "data": {
+    "Ahri": {"id": "Ahri", "key": "103", "name": "Ahri", "tags": ["Mage", "Assassin"],
+             "info": {"attack": 3, "defense": 4, "magic": 8, "difficulty": 5}},
+    "Garen": {"id": "Garen", "key": "86", "name": "Garen", "tags": ["Fighter", "Tank"],
+              "info": {"attack": 7, "defense": 7, "magic": 1, "difficulty": 5}},
+    "Jinx": {"id": "Jinx", "key": "222", "name": "Jinx", "tags": ["Marksman"],
+             "info": {"attack": 9, "defense": 2, "magic": 2, "difficulty": 6}}
+  }
+}
