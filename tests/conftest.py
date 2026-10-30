@@ -16,7 +16,7 @@ class PipelineDirs:
 
 def _synthetic(tmp_path_factory) -> PipelineDirs:
     from lolwp.features.build import build
-    from lolwp.models import train
+    from lolwp.models import insights, train
 
     root = tmp_path_factory.mktemp("pipeline")
     data, art = root / "data", root / "artifacts"
@@ -24,11 +24,7 @@ def _synthetic(tmp_path_factory) -> PipelineDirs:
     store = fill_store(str(data / "lol.db"), str(art / "champions.json"), per_patch=300)
     build(store, str(art / "champions.json"), str(data), str(art))
     train.train(str(data), str(art))
-    try:
-        from lolwp.models import insights
-        insights.make_insights(str(data), str(art))
-    except ImportError:
-        pass
+    insights.make_insights(str(data), str(art))
     return PipelineDirs(str(data), str(art))
 
 
