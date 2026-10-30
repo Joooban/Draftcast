@@ -27,7 +27,9 @@ def split_by_patch(records: list[MatchRecord]) -> tuple[list[MatchRecord], list[
 def build(store: Store, champions_path: str, data_dir: str, artifacts_dir: str) -> dict:
     champs = champions.load(champions_path)
     records: list[MatchRecord] = []
-    raw: dict[str, tuple[dict, dict | None]] = {}
+    # State features don't depend on draft stats, so compute them while streaming and keep
+    # only the small feature dicts; raw JSON for ~20k matches would not fit in memory.
+    states: dict[str, dict[str, int]] = {}
     dropped = 0
     for match_id, details, timeline in store.iter_matches():
         r = parse_match(details)
@@ -35,7 +37,10 @@ def build(store: Store, champions_path: str, data_dir: str, artifacts_dir: str) 
             dropped += 1
             continue
         records.append(r)
-        raw[r.match_id] = (details, timeline)
+        if timeline is not None and r.duration_s >= MIN_DURATION_S:
+            feats = state_features(details, timeline)
+            if feats is not None:
+                states[r.match_id] = feats
     if not records:
         raise SystemExit("No valid matches in the store; run the collector first.")
 
@@ -55,10 +60,7 @@ def build(store: Store, champions_path: str, data_dir: str, artifacts_dir: str) 
             row |= {f"red_{role}": r.red[role] for role in ROLES}
             draft_rows.append(row)
 
-            details, timeline = raw[r.match_id]
-            if timeline is None or r.duration_s < MIN_DURATION_S:
-                continue
-            feats = state_features(details, timeline)
+            feats = states.get(r.match_id)
             if feats is None:
                 continue
             state_rows.append({"match_id": r.match_id, "patch": r.patch, "split": split,

@@ -46,3 +46,29 @@ def test_dataset_columns_and_filters(tmp_path):
     assert state.duration_s.min() >= 960  # every 25th match is short
     assert set(state.match_id) <= set(draft.match_id)
     assert len(state) < len(draft)        # every 10th match has no timeline
+
+
+class ForgetfulStore:
+    """Empties each raw match/timeline once iteration moves on, so build() can't hold them all."""
+
+    def __init__(self, store):
+        self.store = store
+
+    def iter_matches(self):
+        prev = None
+        for item in self.store.iter_matches():
+            if prev:
+                prev[1].clear()
+                if prev[2] is not None:
+                    prev[2].clear()
+            prev = item
+            yield item
+
+
+def test_build_does_not_keep_raw_json(tmp_path):
+    champs = str(tmp_path / "champions.json")
+    store = fill_store(str(tmp_path / "lol.db"), champs, per_patch=40)
+    build(store, champs, str(tmp_path / "a"), str(tmp_path / "art_a"))
+    build(ForgetfulStore(store), champs, str(tmp_path / "b"), str(tmp_path / "art_b"))
+    for name in ("draft.parquet", "state.parquet"):
+        pd.testing.assert_frame_equal(pd.read_parquet(tmp_path / "a" / name), pd.read_parquet(tmp_path / "b" / name))
