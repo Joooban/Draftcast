@@ -1,0 +1,103 @@
+{
+ "metadata": {
+  "matchId": "SG2_1000"
+ },
+ "info": {
+  "gameId": 1000,
+  "queueId": 420,
+  "gameDuration": 1800,
+  "gameVersion": "15.21.716.1234",
+  "participants": [
+   {
+    "participantId": 1,
+    "teamId": 100,
+    "teamPosition": "TOP",
+    "championId": 86,
+    "win": true,
+    "gameEndedInEarlySurrender": false
+   },
+   {
+    "participantId": 2,
+    "teamId": 100,
+    "teamPosition": "JUNGLE",
+    "championId": 64,
+    "win": true,
+    "gameEndedInEarlySurrender": false
+   },
+   {
+    "participantId": 3,
+    "teamId": 100,
+    "teamPosition": "MIDDLE",
+    "championId": 103,
+    "win": true,
+    "gameEndedInEarlySurrender": false
+   },
+   {
+    "participantId": 4,
+    "teamId": 100,
+    "teamPosition": "BOTTOM",
+    "championId": 222,
+    "win": true,
+    "gameEndedInEarlySurrender": false
+   },
+   {
+    "participantId": 5,
+    "teamId": 100,
+    "teamPosition": "UTILITY",
+    "championId": 412,
+    "win": true,
+    "gameEndedInEarlySurrender": false
+   },
+   {
+    "participantId": 6,
+    "teamId": 200,
+    "teamPosition": "TOP",
+    "championId": 122,
+    "win": false,
+    "gameEndedInEarlySurrender": false
+   },
+   {
+    "participantId": 7,
+    "teamId": 200,
+    "teamPosition": "JUNGLE",
+    "championId": 121,
+    "win": false,
+    "gameEndedInEarlySurrender": false
+   },
+   {
+    "participantId": 8,
+    "teamId": 200,
+    "teamPosition": "MIDDLE",
+    "championId": 157,
+    "win": false,
+    "gameEndedInEarlySurrender": false
+   },
+   {
+    "participantId": 9,
+    "teamId": 200,
+    "teamPosition": "BOTTOM",
+    "championId": 51,
+    "win": false,
+    "gameEndedInEarlySurrender": false
+   },
+   {
+    "participantId": 10,
+    "teamId": 200,
+    "teamPosition": "UTILITY",
+    "championId": 89,
+    "win": false,
+    "gameEndedInEarlySurrender": false
+   }
+  ],
+  "teams": [
+   {
+    "teamId": 100,
+    "win": true
+   },
+   {
+    "teamId": 200,
+    "win": false
+   }
+  ]
+ }
+}
