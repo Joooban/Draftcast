@@ -12,7 +12,7 @@ def records():
     recs = []
     for i in range(10):
         blue, red = (BLUE, RED) if i % 3 else (RED, BLUE)
-        recs.append(MatchRecord(f"SG2_{i}", "15.20", int(i % 4 != 0), 1800, dict(blue), dict(red)))
+        recs.append(MatchRecord(f"SG2_{i}", "15.20", int(i % 5 != 0), 1800, dict(blue), dict(red)))
     return recs
 
 
