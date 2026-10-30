@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getChampions, predict } from '../api'
 import DraftInput from '../components/DraftInput'
+import ResultPanel from '../components/ResultPanel'
 import StateInput from '../components/StateInput'
 import type { Champion, GameState, Mode, PartialTeam, PredictRequest, PredictResponse, Role, Team } from '../types'
 import { ROLES, emptyState } from '../types'
@@ -100,18 +101,7 @@ export default function Predict() {
 
       {error && <p className="error" role="alert">{error}</p>}
 
-      {result && (
-        <section className="result">
-          <div className="prob">
-            Blue wins <strong>{(result.probability * 100).toFixed(1)}%</strong>
-          </div>
-          <ul>
-            {result.reasons.map((r) => (
-              <li key={r}>{r}</li>
-            ))}
-          </ul>
-        </section>
-      )}
+      {result && <ResultPanel result={result} />}
     </div>
   )
 }
