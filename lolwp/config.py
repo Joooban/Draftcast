@@ -52,6 +52,7 @@ STATE_RANGES: dict[str, tuple[int, int]] = {
     "first_tower_blue": (-1, 1),
 }
 
+ACCOUNT_ROUTING = "asia"
 QUEUE_ID = 420
 MATCH_WINDOW_DAYS = 42
 MIN_DURATION_S = 960
