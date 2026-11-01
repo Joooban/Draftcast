@@ -180,3 +180,4 @@ main { max-width: 960px; margin: 0 auto; padding: 1.5rem 16px 3rem; }
 .min-games .num { width: 4rem; }
 .champ-scroll { max-height: 32rem; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); }
 .champ-scroll thead th { position: sticky; top: 0; background: var(--surface); }
+.footer { max-width: 960px; margin: 0 auto; padding: 1.5rem 16px 2rem; color: var(--muted); font-size: 0.75rem; border-top: 1px solid var(--border); }
