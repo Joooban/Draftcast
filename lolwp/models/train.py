@@ -9,25 +9,19 @@ import joblib
 import numpy as np
 import pandas as pd
 from lightgbm import LGBMClassifier
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, brier_score_loss, log_loss, roc_auc_score
+from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedKFold, cross_val_predict, cross_val_score
-from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import StandardScaler
 
 from lolwp import champions
 from lolwp.champions import Champion
-from lolwp.config import OOF_FOLDS, ROLES, SEED, STATE_FEATURES, load_settings
+from lolwp.config import OOF_FOLDS, ROLES, SEED, STATE_FEATURES, STATE_MINUTES, load_settings
 from lolwp.features.draft import DRAFT_FEATURES, draft_features
 from lolwp.features.draft_stats import DraftStats, oof_stats
 from lolwp.features.parse import MatchRecord, patch_key
+from lolwp.models.common import COMBINED_FEATURES, SHIPPED_COLUMNS, calibration_bins, make_lr, scores
 
-COMBINED_FEATURES = ["draft_logit", *STATE_FEATURES]
+__all__ = ["COMBINED_FEATURES", "make_lr", "scores", "train"]
 LGBM_PARAMS = dict(n_estimators=300, learning_rate=0.05, num_leaves=15, random_state=SEED, verbose=-1)
-
-
-def make_lr():
-    return make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000))
 
 
 def make_lgbm():
@@ -36,16 +30,6 @@ def make_lgbm():
 
 def _cv():
     return StratifiedKFold(n_splits=OOF_FOLDS, shuffle=True, random_state=SEED)
-
-
-def scores(y, p) -> dict[str, float]:
-    p = np.clip(p, 1e-15, 1 - 1e-15)
-    return {
-        "auc": float(roc_auc_score(y, p)),
-        "log_loss": float(log_loss(y, p, labels=[0, 1])),
-        "accuracy": float(accuracy_score(y, p > 0.5)),
-        "brier": float(brier_score_loss(y, p)),
-    }
 
 
 def baseline_prob(champ_wr_diff) -> np.ndarray:
@@ -110,9 +94,13 @@ def drift_check(frame: pd.DataFrame, features: list[str]) -> dict | None:
             "auc_prev_patch": auc(frame[frame.patch == prev]), "auc_test_patch": auc(frame[frame.patch == newest])}
 
 
+def _state_path(data_dir: str, minute: int) -> str:
+    return os.path.join(data_dir, "state.parquet" if minute == 15 else f"state_m{minute}.parquet")
+
+
 def train(data_dir: str, artifacts_dir: str) -> dict:
     draft = pd.read_parquet(os.path.join(data_dir, "draft.parquet"))
-    state = pd.read_parquet(os.path.join(data_dir, "state.parquet"))
+    state = pd.read_parquet(_state_path(data_dir, 15))
     d_tr, d_te = draft[draft.split == "train"], draft[draft.split == "test"]
     models: dict[str, dict] = {}
 
@@ -146,13 +134,47 @@ def train(data_dir: str, artifacts_dir: str) -> dict:
                                           c_te[COMBINED_FEATURES], c_te.blue_win)
 
     os.makedirs(artifacts_dir, exist_ok=True)
-    for name, model in (("draft", draft_lr), ("state", state_lr), ("combined", combined_lr)):
+    saved = {"draft": draft_lr, "state": state_lr, "combined": combined_lr}
+    calibration = {"draft_lr": calibration_bins(d_te.blue_win, draft_lr.predict_proba(d_te[DRAFT_FEATURES])[:, 1])}
+
+    # The app's state and combined LRs at each minute; minute 15 keeps the original names.
+    for minute in STATE_MINUTES:
+        frame = combined if minute == 15 else pd.read_parquet(_state_path(data_dir, minute)).assign(
+            draft_logit=lambda f: f.match_id.map(logit).to_numpy())
+        tr, te = frame[frame.split == "train"], frame[frame.split == "test"]
+        suffix = "" if minute == 15 else f"_m{minute}"
+        if minute == 15:
+            s_model, c_model = state_lr, combined_lr
+        else:
+            s_model, models[f"state_lr{suffix}"] = evaluate(make_lr(), tr[STATE_FEATURES], tr.blue_win,
+                                                            te[STATE_FEATURES], te.blue_win)
+            c_model, models[f"combined_lr{suffix}"] = evaluate(make_lr(), tr[COMBINED_FEATURES], tr.blue_win,
+                                                               te[COMBINED_FEATURES], te.blue_win)
+            saved[f"state{suffix}"], saved[f"combined{suffix}"] = s_model, c_model
+        calibration[f"state_lr{suffix}"] = calibration_bins(te.blue_win, s_model.predict_proba(te[STATE_FEATURES])[:, 1])
+        calibration[f"combined_lr{suffix}"] = calibration_bins(
+            te.blue_win, c_model.predict_proba(te[COMBINED_FEATURES])[:, 1])
+        frame[SHIPPED_COLUMNS].to_parquet(os.path.join(artifacts_dir, f"state_rows_m{minute}.parquet"), index=False)
+
+    for name, model in saved.items():
         joblib.dump(model, os.path.join(artifacts_dir, f"{name}_model.joblib"))
 
     drift = drift_frames(draft, state, champions.load(os.path.join(artifacts_dir, "champions.json")))
     drift_draft, drift_combined = drift if drift else (draft, combined)
+    summary_path = os.path.join(artifacts_dir, "build_summary.json")
+    dropped = {}
+    if os.path.exists(summary_path):
+        with open(summary_path, encoding="utf-8") as f:
+            dropped = json.load(f).get("dropped", {})
     metrics = {
         "models": models,
+        "calibration": calibration,
+        "data": {
+            "train_patches": sorted(d_tr.patch.unique().tolist(), key=patch_key),
+            "test_patch": str(d_te.patch.iloc[0]) if len(d_te) else None,
+            "n_games": len(draft),
+            "dropped": dropped,
+        },
         "test_patch": str(d_te.patch.iloc[0]) if len(d_te) else None,
         "n_train": {"draft": len(d_tr), "state": len(s_tr)},
         "n_test": {"draft": len(d_te), "state": len(s_te)},
@@ -162,7 +184,7 @@ def train(data_dir: str, artifacts_dir: str) -> dict:
             "combined_lr": drift_check(drift_combined, COMBINED_FEATURES),
         },
     }
-    with open(os.path.join(artifacts_dir, "metrics.json"), "w") as f:
+    with open(os.path.join(artifacts_dir, "metrics.json"), "w", encoding="utf-8") as f:
         json.dump(metrics, f, indent=2)
     return metrics
 

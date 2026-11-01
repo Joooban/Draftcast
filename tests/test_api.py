@@ -165,3 +165,14 @@ def test_api_still_json_with_frontend(web_client):
 def test_no_path_traversal(web_client):
     r = web_client.get("/..%2Fsecret.txt")
     assert "nope" not in r.text
+
+
+def test_api_does_not_import_training(synthetic_dirs):
+    import subprocess
+    import sys
+
+    code = ("import sys; from lolwp.api.main import create_app; create_app(sys.argv[1]); "
+            "print(any(m in sys.modules for m in ('lightgbm', 'statsmodels', 'lolwp.models.train')))")
+    out = subprocess.run([sys.executable, "-c", code, synthetic_dirs.artifacts_dir],
+                         capture_output=True, text=True, check=True)
+    assert out.stdout.strip() == "False"

@@ -11,7 +11,7 @@ from lolwp.config import ROLES, STATE_FEATURES, STATE_RANGES
 from lolwp.features.draft import DRAFT_FEATURES, draft_features
 from lolwp.features.draft_stats import DraftStats
 from lolwp.models.explain import explain, sigmoid
-from lolwp.models.train import COMBINED_FEATURES
+from lolwp.models.common import COMBINED_FEATURES
 
 ROLE_NAMES = {"top": "Top", "jungle": "Jungle", "mid": "Mid", "bot": "Bot", "support": "Support"}
 LABELS = {

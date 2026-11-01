@@ -1,0 +1,13 @@
+{
+ "dropped": {
+  "other_platform": 98,
+  "early_surrender": 642,
+  "role_missing": 31
+ },
+ "patches": [
+  "16.18",
+  "16.19",
+  "16.20",
+  "16.21"
+ ]
+}
