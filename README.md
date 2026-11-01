@@ -71,7 +71,7 @@ Needs Python 3.11+ and Node 20+.
 git clone https://github.com/Joooban/Draftcast.git && cd Draftcast
 python -m venv .venv
 .venv\Scripts\activate                # Mac/Linux: source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt   # everything: collect, train, notebooks, tests (the app alone needs requirements.txt)
 cp .env.example .env                  # then put your key from developer.riotgames.com in RIOT_API_KEY
 
 # 1. Collect (resumable; rerun any step after a key renewal)
