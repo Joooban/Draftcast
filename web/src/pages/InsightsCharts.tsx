@@ -3,10 +3,14 @@ import type { Insights } from '../types'
 
 interface Props {
   data: Insights
-  champions: Insights['champions']
-  query: string
-  onQuery: (q: string) => void
 }
+
+// The app's models whose predicted-vs-actual curves are worth comparing.
+const CALIBRATED: { key: string; label: string }[] = [
+  { key: 'state_lr', label: 'Game state, 15:00' },
+  { key: 'combined_lr', label: 'Draft + game state, 15:00' },
+  { key: 'state_lr_m10', label: 'Game state, 10:00' },
+]
 
 const TERM_LABELS: Record<string, string> = {
   gold_k: '+1k gold',
@@ -28,7 +32,7 @@ const MODEL_LABELS: Record<string, string> = {
 
 const common = { config: plotConfig, useResizeHandler: true, style: { width: '100%' } }
 
-export default function InsightsCharts({ data, champions, query, onQuery }: Props) {
+export default function InsightsCharts({ data }: Props) {
   const c = themeColors()
   const models = Object.keys(MODEL_LABELS).filter((k) => k in data.model_comparison)
   const m = data.model_comparison
@@ -119,47 +123,31 @@ export default function InsightsCharts({ data, champions, query, onQuery }: Prop
         })}
       />
 
-      <h2>Champion win rates</h2>
-      <input
-        className="search"
-        placeholder="Search a champion…"
-        value={query}
-        onChange={(e) => onQuery(e.target.value)}
-        aria-label="Search champions"
-      />
+      <h2>Does the model mean what it says?</h2>
       <p className="muted small">
-        {query ? `${champions.length} match${champions.length === 1 ? '' : 'es'}` : 'Ten highest and ten lowest'} ·
-        champions with at least 30 games in training patches · 95% Wilson intervals
+        Test-patch games grouped by the predicted chance for Blue. Points on the dotted line mean "when it says 70%,
+        Blue wins about 70%". This is the reality check shown with each prediction.
       </p>
-      {champions.length > 0 && (
-        <Plot
-          {...common}
-          data={[
-            {
-              type: 'scatter',
-              mode: 'markers',
-              y: champions.map((ch) => ch.name),
-              x: champions.map((ch) => ch.win_rate * 100),
-              customdata: champions.map((ch) => ch.games),
-              error_x: {
-                type: 'data',
-                symmetric: false,
-                array: champions.map((ch) => (ch.ci_high - ch.win_rate) * 100),
-                arrayminus: champions.map((ch) => (ch.win_rate - ch.ci_low) * 100),
-                color: c.muted,
-              },
-              marker: { color: champions.map((ch) => (ch.win_rate >= 0.5 ? c.blue : c.red)), size: 8 },
-              hovertemplate: '%{y}: %{x:.1f}% over %{customdata} games<extra></extra>',
-            },
-          ]}
-          layout={baseLayout({
-            height: 60 + champions.length * 24,
-            xaxis: { ticksuffix: '%', title: { text: 'Win rate' } },
-            yaxis: { autorange: 'reversed' },
-            shapes: [{ type: 'line', yref: 'paper', y0: 0, y1: 1, x0: 50, x1: 50, line: { color: c.muted, dash: 'dot' } }],
-          })}
-        />
-      )}
+      <Plot
+        {...common}
+        data={CALIBRATED.filter((m) => data.calibration[m.key]).map((m, i) => ({
+          type: 'scatter' as const,
+          mode: 'lines+markers' as const,
+          name: m.label,
+          x: data.calibration[m.key].map((b) => b.mean_pred * 100),
+          y: data.calibration[m.key].map((b) => b.win_rate * 100),
+          customdata: data.calibration[m.key].map((b) => b.n),
+          line: { color: [c.accent, c.blue, c.muted][i], dash: i === 2 ? ('dash' as const) : ('solid' as const) },
+          hovertemplate: '%{fullData.name}: said %{x:.0f}%, Blue won %{y:.0f}% (%{customdata} games)<extra></extra>',
+        }))}
+        layout={baseLayout({
+          height: 340,
+          legend: { orientation: 'h', y: -0.25 },
+          xaxis: { title: { text: 'Predicted chance for Blue' }, ticksuffix: '%', range: [0, 100] },
+          yaxis: { title: { text: 'Blue actually won' }, ticksuffix: '%', range: [0, 100] },
+          shapes: [{ type: 'line', x0: 0, x1: 100, y0: 0, y1: 100, line: { color: c.muted, dash: 'dot' } }],
+        })}
+      />
     </>
   )
 }

@@ -32,7 +32,7 @@ def insights(pipeline_dirs):
 def test_champion_intervals_contain_rate(insights):
     assert insights["champions"]
     for c in insights["champions"]:
-        assert c["games"] >= 30 and c["name"]
+        assert c["games"] >= 10 and c["name"]
         assert c["ci_low"] <= c["win_rate"] <= c["ci_high"]
 
 
@@ -78,3 +78,12 @@ def test_objectives_skips_constant_terms():
     })
     terms = {o["term"] for o in objectives(df)["terms"]}
     assert terms == {"gold_k", "dragons_diff", "towers_diff", "kills_diff"}
+
+
+def test_insights_carry_calibration_and_data(pipeline_dirs):
+    from lolwp.models import insights as ins_mod
+
+    assert ins_mod.MIN_CHAMP_GAMES == 10
+    ins = json.load(open(os.path.join(pipeline_dirs.artifacts_dir, "insights.json"), encoding="utf-8"))
+    assert set(ins["calibration"]) == {"draft_lr", "state_lr", "combined_lr", "state_lr_m10", "combined_lr_m10"}
+    assert ins["data"]["test_patch"] and ins["data"]["n_games"] > 0

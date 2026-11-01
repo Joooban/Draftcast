@@ -11,7 +11,7 @@ from scipy.stats import binomtest
 from lolwp import champions
 from lolwp.config import ROLES, load_settings
 
-MIN_CHAMP_GAMES = 30
+MIN_CHAMP_GAMES = 10  # the app filters further (default 30); this keeps rarer picks searchable
 OBJECTIVE_TERMS = ["gold_k", "dragons_diff", "towers_diff", "grubs_diff", "kills_diff"]
 
 
@@ -70,7 +70,7 @@ def make_insights(data_dir: str, artifacts_dir: str) -> dict:
     draft = pd.read_parquet(os.path.join(data_dir, "draft.parquet"))
     state = pd.read_parquet(os.path.join(data_dir, "state.parquet"))
     names = {cid: c.name for cid, c in champions.load(os.path.join(artifacts_dir, "champions.json")).items()}
-    with open(os.path.join(artifacts_dir, "metrics.json")) as f:
+    with open(os.path.join(artifacts_dir, "metrics.json"), encoding="utf-8") as f:
         metrics = json.load(f)
 
     wins, n = int(draft.blue_win.sum()), len(draft)
@@ -80,8 +80,10 @@ def make_insights(data_dir: str, artifacts_dir: str) -> dict:
         "objectives": objectives(state),
         "blue_side": {"win_rate": wins / n, "n": n, "p_value": float(binomtest(wins, n, 0.5).pvalue)},
         "model_comparison": metrics["models"],
+        "calibration": metrics["calibration"],
+        "data": metrics["data"],
     }
-    with open(os.path.join(artifacts_dir, "insights.json"), "w") as f:
+    with open(os.path.join(artifacts_dir, "insights.json"), "w", encoding="utf-8") as f:
         json.dump(insights, f, indent=1)
     return insights
 

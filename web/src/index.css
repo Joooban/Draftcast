@@ -171,3 +171,11 @@ main { max-width: 960px; margin: 0 auto; padding: 1.5rem 16px 3rem; }
 .page > h2 { margin-bottom: 0; }
 .prose p, .prose li { max-width: 70ch; }
 .prose li { margin-bottom: 0.4rem; }
+
+.trained-on { margin: 0 0 0.5rem; }
+.champ-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1rem; margin-bottom: 0.4rem; }
+.champ-controls .seg { min-width: 15rem; }
+.min-games { display: flex; align-items: center; gap: 0.4rem; }
+.min-games .num { width: 4rem; }
+.champ-scroll { max-height: 32rem; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.champ-scroll thead th { position: sticky; top: 0; background: var(--surface); }

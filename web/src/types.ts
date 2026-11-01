@@ -138,4 +138,25 @@ export interface Insights {
   }
   blue_side: { win_rate: number; n: number; p_value: number }
   model_comparison: Record<string, ModelMetrics>
+  calibration: Record<string, CalibrationBin[]>
+  data: DataSummary
+}
+
+export interface CalibrationBin {
+  lo: number
+  hi: number
+  mean_pred: number
+  win_rate: number
+  n: number
+}
+
+export interface DataSummary {
+  train_patches: string[]
+  test_patch: string | null
+  n_games: number
+  dropped: Record<string, number>
+}
+
+export interface Meta extends DataSummary {
+  minutes: Minute[]
 }

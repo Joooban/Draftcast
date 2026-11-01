@@ -1,4 +1,4 @@
-import type { Champion, Insights, PredictRequest, PredictResponse } from './types'
+import type { Champion, Insights, Meta, PredictRequest, PredictResponse } from './types'
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init)
@@ -25,3 +25,5 @@ export const predict = (req: PredictRequest) =>
   })
 
 export const getInsights = () => request<Insights>('/api/insights')
+
+export const getMeta = () => request<Meta>('/api/meta')

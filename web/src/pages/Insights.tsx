@@ -1,5 +1,7 @@
-import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import { getInsights } from '../api'
+import ChampionTable from '../components/ChampionTable'
+import { trainedOn } from '../format'
 import type { Insights as InsightsData } from '../types'
 
 const Charts = lazy(() => import('./InsightsCharts'))
@@ -9,20 +11,10 @@ const pct = (v: number) => `${(v * 100).toFixed(1)}%`
 export default function Insights() {
   const [data, setData] = useState<InsightsData | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [query, setQuery] = useState('')
 
   useEffect(() => {
     getInsights().then(setData, (e: Error) => setError(e.message))
   }, [])
-
-  const champions = useMemo(() => {
-    if (!data) return []
-    const q = query.trim().toLowerCase()
-    if (q) return data.champions.filter((c) => c.name.toLowerCase().includes(q))
-    // Default view: the 10 best and 10 worst by win rate.
-    const all = data.champions
-    return all.length <= 20 ? all : [...all.slice(0, 10), ...all.slice(-10)]
-  }, [data, query])
 
   if (error) return <div className="page"><h1>Insights</h1><p className="error">{error}</p></div>
   if (!data) return <div className="page"><h1>Insights</h1><p className="muted">Loading…</p></div>
@@ -34,6 +26,7 @@ export default function Insights() {
     <div className="page">
       <h1>Insights</h1>
       <p className="lead">What predicts wins in current SG2 ranked games (Emerald and above).</p>
+      {trainedOn(data.data) && <p className="muted small">{trainedOn(data.data)}.</p>}
 
       <div className="stats">
         <div className="stat">
@@ -52,8 +45,11 @@ export default function Insights() {
       </div>
 
       <Suspense fallback={<p className="muted">Loading charts…</p>}>
-        <Charts data={data} champions={champions} query={query} onQuery={setQuery} />
+        <Charts data={data} />
       </Suspense>
+
+      <h2>Champion win rates</h2>
+      <ChampionTable champions={data.champions} />
     </div>
   )
 }
