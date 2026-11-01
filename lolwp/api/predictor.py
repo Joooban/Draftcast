@@ -23,7 +23,7 @@ LABELS = {
     "attack_diff": "Physical damage", "magic_diff": "Magic damage",
     "gold_diff": "Gold lead at 15:00", "xp_diff": "XP lead at 15:00", "cs_diff": "CS lead at 15:00",
     "level_diff": "Level lead at 15:00", "kills_diff": "Kill lead", "dragons_diff": "Dragons",
-    "grubs_diff": "Voidgrubs", "heralds_diff": "Rift Herald", "towers_diff": "Towers",
+    "grubs_diff": "Voidgrubs", "towers_diff": "Towers",
     "plates_diff": "Turret plates", "wards_placed_diff": "Wards placed", "wards_killed_diff": "Wards cleared",
     "first_blood_blue": "First blood", "first_dragon_blue": "First dragon", "first_tower_blue": "First tower",
     "draft_logit": "Draft",

@@ -13,7 +13,6 @@ const TERM_LABELS: Record<string, string> = {
   dragons_diff: '+1 dragon',
   towers_diff: '+1 tower',
   grubs_diff: '+1 voidgrub',
-  heralds_diff: '+1 herald',
   kills_diff: '+1 kill',
 }
 

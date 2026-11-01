@@ -24,7 +24,8 @@ def split_by_patch(records: list[MatchRecord]) -> tuple[list[MatchRecord], list[
     return train, test, test_patch
 
 
-def build(store: Store, champions_path: str, data_dir: str, artifacts_dir: str) -> dict:
+def build(store: Store, champions_path: str, data_dir: str, artifacts_dir: str,
+          platform: str | None = None) -> dict:
     champs = champions.load(champions_path)
     records: list[MatchRecord] = []
     # State features don't depend on draft stats, so compute them while streaming and keep
@@ -32,7 +33,7 @@ def build(store: Store, champions_path: str, data_dir: str, artifacts_dir: str) 
     states: dict[str, dict[str, int]] = {}
     dropped = 0
     for match_id, details, timeline in store.iter_matches():
-        r = parse_match(details)
+        r = parse_match(details, platform)
         if r is None:
             dropped += 1
             continue
@@ -86,7 +87,8 @@ def build(store: Store, champions_path: str, data_dir: str, artifacts_dir: str) 
 
 def main() -> None:
     s = load_settings()
-    summary = build(Store(s.db_path), os.path.join(s.artifacts_dir, "champions.json"), s.data_dir, s.artifacts_dir)
+    summary = build(Store(s.db_path), os.path.join(s.artifacts_dir, "champions.json"), s.data_dir, s.artifacts_dir,
+                    s.platform)
     print(f"Test patch: {summary['test_patch']}  (invalid matches dropped: {summary['dropped']})")
     print(f"Draft rows: {summary['draft']}")
     print(f"State rows: {summary['state']}")

@@ -21,8 +21,11 @@ def patch_key(patch: str) -> tuple[int, int]:
     return int(major), int(minor)
 
 
-def parse_match(match: dict) -> MatchRecord | None:
+def parse_match(match: dict, platform: str | None = None) -> MatchRecord | None:
+    """`platform` (e.g. "sg2") drops matches played on other servers by the same players."""
     try:
+        if platform and not match["metadata"]["matchId"].upper().startswith(platform.upper() + "_"):
+            return None
         info = match["info"]
         if info.get("queueId") != QUEUE_ID:
             return None

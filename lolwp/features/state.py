@@ -43,8 +43,6 @@ def state_features(match: dict, timeline: dict, minute: int = STATE_MINUTE) -> d
                         f["first_dragon_blue"] = s
                 elif monster == "HORDE":
                     f["grubs_diff"] += s
-                elif monster == "RIFTHERALD":
-                    f["heralds_diff"] += s
             elif kind == "BUILDING_KILL" and e.get("buildingType") == "TOWER_BUILDING":
                 s = -_sign(e.get("teamId"))  # teamId is the team that lost the tower
                 f["towers_diff"] += s

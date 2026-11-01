@@ -28,7 +28,7 @@ def test_diffs_at_15(match, timeline):
     assert f["towers_diff"] == 1 and f["plates_diff"] == 2
     assert f["wards_placed_diff"] == -1
     assert f["first_blood_blue"] == 1 and f["first_dragon_blue"] == -1 and f["first_tower_blue"] == 1
-    assert f["heralds_diff"] == 0 and f["wards_killed_diff"] == 0
+    assert "heralds_diff" not in f and f["wards_killed_diff"] == 0
 
 
 def test_short_timeline_returns_none(match, timeline):

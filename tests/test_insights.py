@@ -44,7 +44,7 @@ def test_gold_curve_bins(insights):
 
 def test_objectives_and_blue_side(insights):
     terms = {o["term"] for o in insights["objectives"]["terms"]}
-    assert terms == {"gold_k", "dragons_diff", "towers_diff", "grubs_diff", "heralds_diff", "kills_diff"}
+    assert terms == {"gold_k", "dragons_diff", "towers_diff", "grubs_diff", "kills_diff"}
     for o in insights["objectives"]["terms"]:
         assert o["ci_low"] <= o["odds_ratio"] <= o["ci_high"] and 0 <= o["p_value"] <= 1
     assert set(insights["objectives"]["dragon_vs_tower"]) == {"estimate_diff", "p_value"}
@@ -56,3 +56,25 @@ def test_synthetic_gold_lead_raises_win_rate(synthetic_dirs):
     ins = json.load(open(os.path.join(synthetic_dirs.artifacts_dir, "insights.json")))
     gold = next(o for o in ins["objectives"]["terms"] if o["term"] == "gold_k")
     assert gold["odds_ratio"] > 1
+
+
+def test_objectives_skips_constant_terms():
+    # A term that never varies in the data (here grubs) must be left out, not crash the fit.
+    import numpy as np
+    import pandas as pd
+
+    from lolwp.models.insights import objectives
+
+    rng = np.random.default_rng(0)
+    n = 400
+    gold = rng.normal(0, 3000, n)
+    df = pd.DataFrame({
+        "gold_diff": gold,
+        "dragons_diff": rng.integers(-2, 3, n),
+        "towers_diff": rng.integers(-2, 3, n),
+        "grubs_diff": np.zeros(n, dtype=int),
+        "kills_diff": rng.integers(-5, 6, n),
+        "blue_win": (gold + rng.normal(0, 3000, n) > 0).astype(int),
+    })
+    terms = {o["term"] for o in objectives(df)["terms"]}
+    assert terms == {"gold_k", "dragons_diff", "towers_diff", "kills_diff"}

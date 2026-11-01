@@ -46,8 +46,8 @@ export default function Method() {
           the full training set.
         </li>
         <li>
-          <strong>Game state at 15:00:</strong> gold, XP, CS, level, kills, dragons, voidgrubs, heralds, towers,
-          plates, wards placed and cleared, and who got first blood, dragon and tower. All are Blue minus Red.
+          <strong>Game state at 15:00:</strong> gold, XP, CS, level, kills, dragons, voidgrubs, towers,
+          plates (inner turrets have plates too), wards placed and cleared, and who got first blood, dragon and tower. All are Blue minus Red.
         </li>
         <li>
           <strong>Combined:</strong> the draft model's log-odds output (out-of-fold for training rows) plus the

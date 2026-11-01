@@ -54,3 +54,12 @@ def test_duplicate_role_rejected(match):
 
 def test_patch_key_orders_numerically():
     assert sorted(["15.9", "15.21", "15.10"], key=patch_key) == ["15.9", "15.10", "15.21"]
+
+
+def test_other_platform_rejected(match):
+    match["metadata"]["matchId"] = "OC1_711130978"
+    assert parse_match(match, platform="sg2") is None
+
+
+def test_own_platform_kept(match):
+    assert parse_match(match, platform="sg2") is not None

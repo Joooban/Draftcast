@@ -12,7 +12,7 @@ from lolwp import champions
 from lolwp.config import ROLES, load_settings
 
 MIN_CHAMP_GAMES = 30
-OBJECTIVE_TERMS = ["gold_k", "dragons_diff", "towers_diff", "grubs_diff", "heralds_diff", "kills_diff"]
+OBJECTIVE_TERMS = ["gold_k", "dragons_diff", "towers_diff", "grubs_diff", "kills_diff"]
 
 
 def wilson(wins: int, n: int, z: float = 1.96) -> tuple[float, float]:
@@ -54,10 +54,12 @@ def gold_curve(state: pd.DataFrame) -> list[dict]:
 
 def objectives(state: pd.DataFrame) -> dict:
     df = state.assign(gold_k=state.gold_diff / 1000)
-    fit = smf.logit("blue_win ~ " + " + ".join(OBJECTIVE_TERMS), data=df).fit(disp=0)
+    # A term with no variation (e.g. no grubs taken by 15:00) makes the fit singular.
+    used = [t for t in OBJECTIVE_TERMS if df[t].nunique() > 1]
+    fit = smf.logit("blue_win ~ " + " + ".join(used), data=df).fit(disp=0)
     ci = fit.conf_int()
     terms = [{"term": t, "odds_ratio": float(np.exp(fit.params[t])), "ci_low": float(np.exp(ci.loc[t, 0])),
-              "ci_high": float(np.exp(ci.loc[t, 1])), "p_value": float(fit.pvalues[t])} for t in OBJECTIVE_TERMS]
+              "ci_high": float(np.exp(ci.loc[t, 1])), "p_value": float(fit.pvalues[t])} for t in used]
     test = fit.t_test("dragons_diff = towers_diff")
     return {"terms": terms,
             "dragon_vs_tower": {"estimate_diff": float(np.squeeze(test.effect)),
