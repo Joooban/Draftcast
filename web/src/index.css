@@ -146,18 +146,20 @@ main { max-width: 960px; margin: 0 auto; padding: 1.5rem 16px 3rem; }
 .primary { background: var(--accent); color: #fff; border: 0; border-radius: var(--radius); padding: 0.65rem 1.6rem; font-weight: 600; }
 
 .result { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; }
-.prob { font-size: 1.2rem; }
-.prob strong { font-size: 2.4rem; color: var(--accent); margin-left: 0.25rem; }
-
-.footer { max-width: 960px; margin: 0 auto; padding: 1.5rem 16px 2rem; color: var(--muted); font-size: 0.75rem; border-top: 1px solid var(--border); }
-
-.reasons { margin: 0 0 1rem; padding-left: 1.2rem; }
-.split { margin-bottom: 1rem; }
-.split-bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--border); }
-.split-bar span { flex-basis: 0; }
-.seg-draft { background: var(--accent); }
-.seg-state { background: #e0a43a; }
-.split-legend { display: flex; gap: 1.25rem; margin-top: 0.35rem; flex-wrap: wrap; }
+.verdict { font-size: 1.5rem; font-weight: 650; margin: 0 0 0.25rem; line-height: 1.25; }
+.verdict.blue { color: var(--blue); }
+.verdict.red { color: var(--red); }
+.odds { margin: 0 0 0.75rem; }
+.reasons { margin: 0 0 0.5rem; padding-left: 1.2rem; }
+.reasons li { display: flex; justify-content: space-between; gap: 1rem; padding: 0.15rem 0; }
+.pts { font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 600; }
+.full-reasoning { margin-top: 0.75rem; border-top: 1px solid var(--border); padding-top: 0.5rem; }
+.full-reasoning summary { cursor: pointer; font-weight: 600; padding: 0.35rem 0; }
+.full-reasoning summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.full-reasoning h4 { margin: 1rem 0 0.25rem; }
+.factors { border-collapse: collapse; width: 100%; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.factors th, .factors td { padding: 0.3rem 0.5rem; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; }
+.factors th[scope='row'], .factors thead th:first-child { text-align: left; font-weight: 500; }
 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: middle; }
 
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
