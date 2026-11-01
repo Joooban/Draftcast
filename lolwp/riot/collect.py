@@ -1,6 +1,7 @@
 """Collector CLI: seed players from ranked ladders, then fetch match IDs, details and timelines.
 
 Every step reads its to-do list from the store, so rerunning after a key expiry resumes.
+`--limit N` is a total: a step stops once the store holds N of its item, so reruns never overshoot.
 """
 import argparse
 import time
@@ -68,13 +69,20 @@ def seed(client, store: Store, settings: Settings) -> int:
     return added
 
 
+def _remaining(store: Store, item: str, limit: int) -> int:
+    return max(0, limit - store.counts()[item])
+
+
 def collect_ids(client, store: Store, settings: Settings, limit: int, per_player: int = 50,
-                now: float | None = None) -> int:
+                now: float | None = None, raise_expired: bool = False) -> int:
+    """Scan unscanned players until the store holds `limit` match IDs."""
     now = time.time() if now is None else now
     params = {"startTime": int(now - MATCH_WINDOW_DAYS * 86400), "queue": QUEUE_ID, "count": per_player}
     added = 0
     try:
-        for i, puuid in enumerate(store.players_todo(limit), 1):
+        for i, puuid in enumerate(store.players_todo(_remaining(store, "match_ids", limit)), 1):
+            if not _remaining(store, "match_ids", limit):
+                break
             try:
                 ids = client.get(f"{_regional(settings)}/lol/match/v5/matches/by-puuid/{puuid}/ids", params) or []
             except TransientError as e:
@@ -85,14 +93,16 @@ def collect_ids(client, store: Store, settings: Settings, limit: int, per_player
             if i % 50 == 0:
                 print(f"{i} players, {added} new match ids")
     except KeyExpiredError:
+        if raise_expired:
+            raise
         print(EXPIRED_MSG)
     return added
 
 
-def collect_details(client, store: Store, settings: Settings, limit: int) -> int:
+def collect_details(client, store: Store, settings: Settings, limit: int, raise_expired: bool = False) -> int:
     saved = 0
     try:
-        for i, match_id in enumerate(store.details_todo(limit), 1):
+        for i, match_id in enumerate(store.details_todo(_remaining(store, "details", limit)), 1):
             try:
                 match = client.get(f"{_regional(settings)}/lol/match/v5/matches/{match_id}")
             except TransientError as e:
@@ -103,14 +113,16 @@ def collect_details(client, store: Store, settings: Settings, limit: int) -> int
             if i % 100 == 0:
                 print(f"{i} fetched, {saved} saved")
     except KeyExpiredError:
+        if raise_expired:
+            raise
         print(EXPIRED_MSG)
     return saved
 
 
-def collect_timelines(client, store: Store, settings: Settings, limit: int) -> int:
+def collect_timelines(client, store: Store, settings: Settings, limit: int, raise_expired: bool = False) -> int:
     saved = 0
     try:
-        for i, match_id in enumerate(store.timelines_todo(limit, seed=SEED), 1):
+        for i, match_id in enumerate(store.timelines_todo(_remaining(store, "timelines", limit), seed=SEED), 1):
             try:
                 timeline = client.get(f"{_regional(settings)}/lol/match/v5/matches/{match_id}/timeline")
             except TransientError as e:
@@ -121,6 +133,8 @@ def collect_timelines(client, store: Store, settings: Settings, limit: int) -> i
             if i % 100 == 0:
                 print(f"{i} fetched, {saved} saved")
     except KeyExpiredError:
+        if raise_expired:
+            raise
         print(EXPIRED_MSG)
     return saved
 
@@ -128,7 +142,8 @@ def collect_timelines(client, store: Store, settings: Settings, limit: int) -> i
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="python -m lolwp.riot.collect")
     parser.add_argument("command", choices=["check", "seed", "ids", "details", "timelines", "status"])
-    parser.add_argument("--limit", type=int, default=1000)
+    parser.add_argument("--limit", type=int, default=1000,
+                        help="stop once the store holds this many of the step's item (ids, details, timelines)")
     parser.add_argument("--riot-id", help="Name#TAG, for check")
     args = parser.parse_args(argv)
 

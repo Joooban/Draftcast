@@ -142,3 +142,37 @@ def test_transient_seed_page_skipped(tmp_path):
         return [{"puuid": "a"}] if "/CHALLENGER/" in url else []
 
     assert collect.seed(FakeClient(route), store, s) == 1
+
+
+def _detail(url, params):
+    return {"info": {"gameDuration": 1800}, "metadata": {"matchId": url.rsplit("/", 1)[1]}}
+
+
+def test_details_limit_is_total(tmp_path):
+    s = settings(tmp_path)
+    store = Store(s.db_path)
+    store.add_match_ids([f"SG2_{i}" for i in range(5)])
+    assert collect.collect_details(FakeClient(_detail), store, s, limit=3) == 3
+    client = FakeClient(_detail)
+    assert collect.collect_details(client, store, s, limit=4) == 1  # store already holds 3
+    assert len(client.calls) == 1 and store.counts()["details"] == 4
+    assert collect.collect_details(FakeClient(_detail), store, s, limit=4) == 0
+
+
+def test_ids_stop_at_total(tmp_path):
+    s = settings(tmp_path)
+    store = Store(s.db_path)
+    store.add_players([(p, "EMERALD", "I") for p in ("p1", "p2", "p3")])
+    client = FakeClient(lambda url, p: [f"SG2_{url.split('/')[-2]}_{i}" for i in range(2)])
+    collect.collect_ids(client, store, s, limit=3)
+    assert len(client.calls) == 2 and store.players_todo(10) == ["p3"]
+
+
+def test_raise_expired_reraises(tmp_path):
+    import pytest
+
+    s = settings(tmp_path)
+    store = Store(s.db_path)
+    store.add_match_ids(["SG2_1"])
+    with pytest.raises(KeyExpiredError):
+        collect.collect_details(FakeClient(_detail, fail_on=1), store, s, limit=10, raise_expired=True)
