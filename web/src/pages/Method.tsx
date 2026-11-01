@@ -27,8 +27,8 @@ export default function Method() {
           Game-state rows also need the game to last at least 16 minutes.
         </li>
         <li>
-          Split by time: the newest patch is the test set; all older patches are training data. Tuning uses 5-fold
-          cross-validation inside the training set only.
+          Split by time: the newest patch is the test set; all older patches are training data. 5-fold
+          cross-validation inside the training set is used only to report how stable each model is; nothing is tuned.
         </li>
       </ul>
 
@@ -46,8 +46,10 @@ export default function Method() {
           the full training set.
         </li>
         <li>
-          <strong>Game state at 15:00:</strong> gold, XP, CS, level, kills, dragons, voidgrubs, towers,
-          plates (inner turrets have plates too), wards placed and cleared, and who got first blood, dragon and tower. All are Blue minus Red.
+          <strong>Game state at 10:00 or 15:00:</strong> gold, CS, total level, kills, dragons, voidgrubs, towers,
+          plates (inner turrets have plates too), wards placed and cleared, and who got first blood, dragon and tower.
+          All are Blue minus Red. XP is left out because players can't see it on the scoreboard, and total level
+          carries almost the same signal. Both snapshots come from the same games (at least 16 minutes long).
         </li>
         <li>
           <strong>Combined:</strong> the draft model's log-odds output (out-of-fold for training rows) plus the
@@ -62,6 +64,22 @@ export default function Method() {
         <em>coefficient × value</em>, so the “why” chart is exact: start from the average game, add features in order
         of size, convert to probability after each step, and the bars sum to the prediction. The baseline for
         comparison maps the champion win-rate difference straight to a probability with no fitting.
+      </p>
+
+      <h2>Blank fields</h2>
+      <p>
+        Mid-game you won't see everything, so any field can be left blank. A blank means "unknown", never "even": the
+        app fits a logistic regression on just the fields you filled in, from the same training games, scores it on
+        the test patch and caches it. The accuracy and reality check shown with a prediction always belong to the
+        model that made it, so leaving gold blank honestly shows a less reliable model. Per-player boxes (level, CS,
+        gold) only count once all ten are filled.
+      </p>
+
+      <h2>Reality check</h2>
+      <p>
+        Test-patch games are grouped into ten bins by the predicted chance for Blue. Each prediction shows its bin:
+        "when this model said 60–70%, Blue won 66% of 647 test games". If the model is honest, those numbers match;
+        the Insights page plots every bin.
       </p>
 
       <h2>Alternatives considered and rejected</h2>
