@@ -1,5 +1,5 @@
 // Set this to the public repository URL once the project is pushed.
-const REPO_URL = ''
+const REPO_URL = 'https://github.com/Joooban/Draftcast'
 
 export default function Method() {
   return (

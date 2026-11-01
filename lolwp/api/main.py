@@ -20,7 +20,7 @@ def _readable(exc: RequestValidationError) -> str:
 
 def create_app(artifacts_dir: str | None = None, web_dir: str | None = None) -> FastAPI:
     artifacts_dir = artifacts_dir or load_settings().artifacts_dir
-    app = FastAPI(title="LoL Win Predictor")
+    app = FastAPI(title="Draftcast")
     try:
         predictor: Predictor | None = Predictor(artifacts_dir)
     except FileNotFoundError:

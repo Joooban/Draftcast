@@ -8,7 +8,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <header className="nav">
-        <span className="brand">LoL Win Predictor</span>
+        <span className="brand">Draftcast</span>
         <nav>
           <NavLink to="/" end>
             Predict

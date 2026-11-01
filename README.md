@@ -1,6 +1,6 @@
-# League of Legends Win Predictor
+# Draftcast
 
-**How much does the draft decide a ranked League game, compared with the first 15 minutes?**
+A League of Legends win predictor. **How much does the draft decide a ranked game, compared with the first 15 minutes?**
 
 ## Headline findings
 
@@ -68,6 +68,7 @@ Train: 17,838 draft / 17,087 state rows. Test: 6,845 / 6,522.
 Needs Python 3.11+ and Node 20+.
 
 ```bash
+git clone https://github.com/Joooban/Draftcast.git && cd Draftcast
 python -m venv .venv
 .venv\Scripts\activate                # Mac/Linux: source .venv/bin/activate
 pip install -r requirements.txt

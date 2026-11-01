@@ -101,7 +101,19 @@ main { max-width: 960px; margin: 0 auto; padding: 1.5rem 16px 3rem; }
 .state-grid .full { grid-column: 1 / -1; margin: 0; }
 .slider { display: flex; flex-direction: column; gap: 0.2rem; }
 .slider-head { display: flex; justify-content: space-between; font-size: 0.9rem; }
-.slider input { width: 100%; accent-color: var(--accent); }
+.slider-row { display: flex; align-items: center; gap: 0.6rem; }
+.slider-row input[type='range'] { flex: 1; min-width: 0; accent-color: var(--accent); }
+.num {
+  width: 5.5rem; padding: 0.3rem 0.45rem; text-align: right; font: inherit; font-variant-numeric: tabular-nums;
+  background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+}
+.num:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.seg { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.seg-btn { flex: 1; background: var(--surface); color: var(--text); border: 0; padding: 0.35rem 0; font: inherit; }
+.seg-btn + .seg-btn { border-left: 1px solid var(--border); }
+.seg-btn.active { background: var(--muted); color: #fff; }
+.seg-btn.active.blue { background: var(--blue); }
+.seg-btn.active.red { background: var(--red); }
 
 .actions { display: flex; align-items: center; gap: 1rem; }
 .primary { background: var(--accent); color: #fff; border: 0; border-radius: var(--radius); padding: 0.65rem 1.6rem; font-weight: 600; }
