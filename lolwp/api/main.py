@@ -50,6 +50,10 @@ def create_app(artifacts_dir: str | None = None, web_dir: str | None = None) -> 
         except ValidationError as e:
             raise HTTPException(422, str(e))
 
+    @app.get("/api/meta")
+    def meta():
+        return ready().meta()
+
     @app.get("/api/insights")
     def insights():
         try:

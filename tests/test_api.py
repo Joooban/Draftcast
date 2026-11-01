@@ -40,7 +40,9 @@ def test_predict_draft_ok(client, ids):
     r = client.post("/api/predict", json={"mode": "draft", "blue": blue, "red": red})
     assert r.status_code == 200, r.text
     body = r.json()
-    assert 0 <= body["probability"] <= 1 and len(body["reasons"]) == 3 and body["split"] is None
+    assert 0 <= body["probability"] <= 1 and len(body["reasons"]) <= 5 and body["split"] is None
+    assert all(set(r) == {"text", "value_pct"} for r in body["reasons"])
+    assert "coin flip" in body["reliability"]["text"]
     total = body["baseline"] + sum(c["value_pct"] for c in body["contributions"]) / 100
     assert total == pytest.approx(body["probability"], abs=1e-9)
     assert all(c["label"] for c in body["contributions"])
@@ -101,11 +103,90 @@ def test_state_out_of_range_422(client):  # Review Focus 5
     assert r.status_code == 422 and "gold_diff" in r.json()["detail"]
 
 
-def test_state_missing_feature_422(client):
-    state = dict(STATE)
-    del state["towers_diff"]
+def test_state_partial_ok(client):
+    state = {"gold_diff": 2500, "kills_diff": 3, "cs_diff": None}
     r = client.post("/api/predict", json={"mode": "state", "state": state})
-    assert r.status_code == 422 and "towers_diff" in r.json()["detail"]
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["omitted"] == sorted(set(STATE_FEATURES) - {"gold_diff", "kills_diff"})
+    assert {c["feature"] for c in body["contributions"]} == {"gold_diff", "kills_diff"}
+    assert body["probability"] > 0.5 and "leaves out 11" in body["reliability"]["text"]
+    total = body["baseline"] + sum(c["value_pct"] for c in body["contributions"]) / 100
+    assert total == pytest.approx(body["probability"], abs=1e-9)
+
+
+def test_state_all_blank_422(client):  # Review Focus 1
+    r = client.post("/api/predict", json={"mode": "state", "state": {k: None for k in STATE_FEATURES}})
+    assert r.status_code == 422 and "at least one" in r.json()["detail"]
+
+
+def test_both_partial_state_split_exact(client, ids):  # Review Focus 2
+    blue, red = teams(ids)
+    r = client.post("/api/predict", json={"mode": "both", "blue": blue, "red": red, "state": {"gold_diff": 1500}})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert {c["feature"] for c in body["contributions"]} == {"draft_logit", "gold_diff"}
+    total = body["baseline"] + sum(c["value_pct"] for c in body["contributions"]) / 100
+    assert total == pytest.approx(body["probability"], abs=1e-9)
+    split = body["split"]
+    assert split["draft_pct"] + split["state_pct"] == pytest.approx((body["probability"] - body["baseline"]) * 100)
+
+
+def test_bool_rejected_422(client):
+    r = client.post("/api/predict", json={"mode": "state", "state": {"gold_diff": True}})
+    assert r.status_code == 422
+
+
+def test_reasons_skip_zero_values(client):
+    state = {"gold_diff": 2500, "kills_diff": 0, "towers_diff": 0}
+    texts = [x["text"].lower() for x in client.post("/api/predict", json={"mode": "state", "state": state}).json()["reasons"]]
+    assert texts and not any("kill" in t or "tower" in t for t in texts)
+
+
+def test_response_has_layers(client):
+    body = client.post("/api/predict", json={"mode": "state", "state": STATE}).json()
+    assert body["verdict"] and body["strength"] in {"toss-up", "slight edge", "favored", "strong favorite"}
+    cal = body["calibration"]
+    assert cal["lo"] <= body["probability"] <= cal["hi"] and cal["n"] > 0
+    assert body["reliability"]["text"] and body["omitted"] == [] and body["minute"] == 15
+    gold = next(c for c in body["contributions"] if c["feature"] == "gold_diff")
+    assert gold["value"] == 2500 and isinstance(gold["logit"], float)
+
+
+def test_minute_10_request(client):
+    body = client.post("/api/predict", json={"mode": "state", "minute": 10, "state": {"gold_diff": 1000}}).json()
+    assert body["minute"] == 10 and 0 <= body["probability"] <= 1
+
+
+def test_bad_minute_422(client):
+    assert client.post("/api/predict", json={"mode": "state", "minute": 20, "state": STATE}).status_code == 422
+
+
+def test_meta(client):
+    body = client.get("/api/meta").json()
+    assert body["test_patch"] and body["n_games"] > 0 and body["minutes"] == [10, 15]
+
+
+def test_unseen_champion_ok(synthetic_dirs, tmp_path):
+    import json
+    import shutil
+
+    from lolwp.features.draft_stats import DraftStats
+
+    art = tmp_path / "art"
+    shutil.copytree(synthetic_dirs.artifacts_dir, art)
+    data = json.loads((art / "champions.json").read_text(encoding="utf-8"))
+    template = next(iter(data["data"].values()))
+    data["data"]["Newcomer"] = template | {"id": "Newcomer", "key": "9999", "name": "Newcomer"}
+    (art / "champions.json").write_text(json.dumps(data), encoding="utf-8")
+    assert DraftStats.from_json(str(art / "draft_stats.json")).champ_rate(9999) == 0.5
+
+    c = TestClient(create_app(str(art)))
+    ids = [ch["id"] for ch in c.get("/api/champions").json() if ch["id"] != 9999][:9]
+    blue, red = dict(zip(ROLES, [9999, *ids[:4]])), dict(zip(ROLES, ids[4:9]))
+    r = c.post("/api/predict", json={"mode": "draft", "blue": blue, "red": red})
+    assert r.status_code == 200, r.text
+    assert 0 <= r.json()["probability"] <= 1
 
 
 def test_state_unknown_feature_422(client):

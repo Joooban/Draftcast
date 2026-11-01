@@ -6,12 +6,14 @@ import joblib
 import pandas as pd
 
 from lolwp import champions as champ_data
-from lolwp.api.schemas import ContributionOut, PredictRequest, PredictResponse, Split
-from lolwp.config import ROLES, STATE_FEATURES, STATE_RANGES
+from lolwp.api.explain_text import reason_text, strength, verdict
+from lolwp.api.schemas import (CalibrationBin, ContributionOut, PredictRequest, PredictResponse, Reason,
+                               Reliability, Split)
+from lolwp.config import ROLES, STATE_FEATURES, STATE_MINUTES, STATE_RANGES
 from lolwp.features.draft import DRAFT_FEATURES, draft_features
 from lolwp.features.draft_stats import DraftStats
 from lolwp.models.explain import explain, sigmoid
-from lolwp.models.common import COMBINED_FEATURES
+from lolwp.models.refit import FittedModel, ModelBank, model_name
 
 ROLE_NAMES = {"top": "Top", "jungle": "Jungle", "mid": "Mid", "bot": "Bot", "support": "Support"}
 LABELS = {
@@ -21,13 +23,14 @@ LABELS = {
     "tag_Tank_diff": "Tanks", "tag_Fighter_diff": "Fighters", "tag_Mage_diff": "Mages",
     "tag_Assassin_diff": "Assassins", "tag_Marksman_diff": "Marksmen", "tag_Support_diff": "Supports",
     "attack_diff": "Physical damage", "magic_diff": "Magic damage",
-    "gold_diff": "Gold lead at 15:00", "cs_diff": "CS lead at 15:00",
-    "level_diff": "Level lead at 15:00", "kills_diff": "Kill lead", "dragons_diff": "Dragons",
+    "gold_diff": "Gold lead", "cs_diff": "CS lead",
+    "level_diff": "Level lead", "kills_diff": "Kill lead", "dragons_diff": "Dragons",
     "grubs_diff": "Voidgrubs", "towers_diff": "Towers",
     "plates_diff": "Turret plates", "wards_placed_diff": "Wards placed", "wards_killed_diff": "Wards cleared",
     "first_blood_blue": "First blood", "first_dragon_blue": "First dragon", "first_tower_blue": "First tower",
     "draft_logit": "Draft",
 }
+MAX_REASONS = 5
 
 
 class ValidationError(ValueError):
@@ -37,9 +40,11 @@ class ValidationError(ValueError):
 class Predictor:
     def __init__(self, artifacts_dir: str):
         path = lambda name: os.path.join(artifacts_dir, name)
-        self.models = {n: joblib.load(path(f"{n}_model.joblib")) for n in ("draft", "state", "combined")}
+        self.draft_model = joblib.load(path("draft_model.joblib"))
         self.stats = DraftStats.from_json(path("draft_stats.json"))
         self.champs = champ_data.load(path("champions.json"))
+        self.bank = ModelBank(artifacts_dir)
+        self.metrics = self.bank.metrics
         self._insights_path = path("insights.json")
 
     def champions(self) -> list[dict]:
@@ -49,6 +54,9 @@ class Predictor:
     def insights(self) -> dict:
         with open(self._insights_path, encoding="utf-8") as f:
             return json.load(f)
+
+    def meta(self) -> dict:
+        return {**self.metrics.get("data", {}), "minutes": list(STATE_MINUTES)}
 
     # --- validation ---
 
@@ -66,19 +74,20 @@ class Predictor:
         return blue, red
 
     def _state_input(self, req: PredictRequest) -> dict[str, int]:
+        """Known game-state fields only; missing or null fields are unknown."""
         if req.state is None:
-            raise ValidationError(f"Mode '{req.mode}' needs the game state at 15:00.")
-        missing = [k for k in STATE_FEATURES if k not in req.state]
-        if missing:
-            raise ValidationError(f"Missing game-state value(s): {', '.join(missing)}.")
+            raise ValidationError(f"Mode '{req.mode}' needs the game state.")
         extra = sorted(set(req.state) - set(STATE_FEATURES))
         if extra:
             raise ValidationError(f"Unknown game-state field(s): {', '.join(extra)}.")
-        for k in STATE_FEATURES:
+        known = {k: req.state[k] for k in STATE_FEATURES if req.state.get(k) is not None}
+        if not known:
+            raise ValidationError("Enter at least one game-state value.")
+        for k, v in known.items():
             lo, hi = STATE_RANGES[k]
-            if not lo <= req.state[k] <= hi:
-                raise ValidationError(f"{k} must be between {lo} and {hi} (got {req.state[k]}).")
-        return {k: req.state[k] for k in STATE_FEATURES}
+            if not lo <= v <= hi:
+                raise ValidationError(f"{k} must be between {lo} and {hi} (got {v}).")
+        return known
 
     # --- prediction ---
 
@@ -91,24 +100,70 @@ class Predictor:
         if draft is not None:
             draft_x = pd.DataFrame([draft_features(*draft, self.stats, self.champs)])[DRAFT_FEATURES]
 
+        known = tuple(f for f in STATE_FEATURES if state is not None and f in state)
         if req.mode == "draft":
-            model, x = self.models["draft"], draft_x
+            m = self.metrics["models"]["draft_lr"]
+            fitted = FittedModel(self.draft_model, DRAFT_FEATURES, m["auc"], m["accuracy"],
+                                 self.metrics["calibration"]["draft_lr"])
+            x = draft_x
         elif req.mode == "state":
-            model, x = self.models["state"], pd.DataFrame([state])[STATE_FEATURES]
+            fitted = self.bank.get("state", req.minute, known)
+            x = pd.DataFrame([state])[list(known)]
         else:
-            logit = float(self.models["draft"].decision_function(draft_x)[0])
-            model, x = self.models["combined"], pd.DataFrame([{"draft_logit": logit, **state}])[COMBINED_FEATURES]
+            logit = float(self.draft_model.decision_function(draft_x)[0])
+            features = ("draft_logit", *known)
+            fitted = self.bank.get("combined", req.minute, features)
+            x = pd.DataFrame([{"draft_logit": logit, **state}])[list(features)]
 
-        baseline, prob, contribs = explain(model, x)
-        split = self._split(model, x, baseline, prob) if req.mode == "both" else None
+        baseline, prob, contribs = explain(fitted.model, x)
+        omitted = sorted(set(STATE_FEATURES) - set(known)) if state is not None else []
+        reasons = []
+        for c in contribs:
+            text = reason_text(c.feature, float(x[c.feature].iloc[0]))
+            if text:
+                reasons.append(Reason(text=text, value_pct=c.value_pct))
+            if len(reasons) == MAX_REASONS:
+                break
+        # The verdict's "mostly because" must favour the side that's ahead.
+        top = next((r.text for r in reasons if (r.value_pct > 0) == (prob >= 0.5)), None)
+
         return PredictResponse(
             probability=prob,
             baseline=baseline,
+            verdict=verdict(prob, top),
+            strength=strength(prob),
             contributions=[ContributionOut(feature=c.feature, label=LABELS.get(c.feature, c.feature),
-                                           value_pct=c.value_pct) for c in contribs],
-            reasons=[self._reason(c, x) for c in contribs[:3]],
-            split=split,
+                                           value_pct=c.value_pct, logit=c.logit,
+                                           value=float(state[c.feature]) if state and c.feature in state else None)
+                           for c in contribs],
+            reasons=reasons,
+            split=self._split(fitted.model, x, baseline, prob) if req.mode == "both" else None,
+            omitted=omitted,
+            calibration=self._bin(fitted.calibration, prob),
+            reliability=self._reliability(req, fitted, omitted),
+            minute=req.minute,
         )
+
+    @staticmethod
+    def _bin(bins: list[dict], prob: float) -> CalibrationBin | None:
+        for b in bins:
+            if b["lo"] <= prob < b["hi"] or (prob == 1.0 and b["hi"] == 1.0):
+                return CalibrationBin(lo=b["lo"], hi=b["hi"], win_rate=b["win_rate"], n=b["n"])
+        return None
+
+    def _reliability(self, req: PredictRequest, fitted: FittedModel, omitted: list[str]) -> Reliability:
+        if req.mode == "draft":
+            text = (f"Draft-only predictions are close to a coin flip (test AUC {fitted.auc:.2f}); "
+                    "read this as a lean, not a call.")
+        else:
+            patch = self.metrics.get("test_patch")
+            text = f"This model was right {fitted.accuracy:.0%} of the time on patch {patch} (AUC {fitted.auc:.2f})."
+            if omitted:
+                kind = "state" if req.mode == "state" else "combined"
+                full_acc = self.metrics["models"][model_name(kind, req.minute)]["accuracy"]
+                text += (f" It leaves out {len(omitted)} unknown field{'' if len(omitted) == 1 else 's'};"
+                         f" the full model is right {full_acc:.0%}.")
+        return Reliability(auc=fitted.auc, accuracy=fitted.accuracy, text=text)
 
     @staticmethod
     def _split(model, x: pd.DataFrame, baseline: float, prob: float) -> Split:
@@ -118,12 +173,3 @@ class Predictor:
         draft_term = lr.coef_[0][i] * scaler.transform(x)[0][i]
         draft_pct = (sigmoid(lr.intercept_[0] + draft_term) - baseline) * 100
         return Split(draft_pct=draft_pct, state_pct=(prob - baseline) * 100 - draft_pct)
-
-    @staticmethod
-    def _reason(c, x: pd.DataFrame) -> str:
-        side = "Blue" if c.value_pct >= 0 else "Red"
-        if c.feature.startswith("lane_"):
-            role = ROLE_NAMES[c.feature.removeprefix("lane_")].lower()
-            rate = float(x[c.feature].iloc[0]) + 0.5
-            return f"Blue's {role} lane matchup historically wins {rate:.0%} of games ({c.value_pct:+.1f}%)"
-        return f"{LABELS.get(c.feature, c.feature)} favors {side} ({c.value_pct:+.1f}%)"
