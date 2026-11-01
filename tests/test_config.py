@@ -7,7 +7,16 @@ def test_roles_and_mapping_align():
 
 def test_every_state_feature_has_range():
     assert set(config.STATE_FEATURES) == set(config.STATE_RANGES)
-    assert len(config.STATE_FEATURES) == 14
+    assert len(config.STATE_FEATURES) == 13
+
+
+def test_xp_not_a_state_feature():
+    # Players can't see XP on the scoreboard; total level carries the same signal.
+    assert "xp_diff" not in config.STATE_FEATURES
+
+
+def test_state_minutes():
+    assert config.STATE_MINUTES == (10, 15)
 
 
 def test_herald_not_a_state_feature():

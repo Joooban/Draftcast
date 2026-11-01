@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from lolwp.features.parse import parse_match, patch_key
+from lolwp.features.parse import parse_match, parse_match_checked, patch_key
 
 FIXTURE = Path(__file__).parent / "fixtures" / "match_valid.json"
 
@@ -63,3 +63,36 @@ def test_other_platform_rejected(match):
 
 def test_own_platform_kept(match):
     assert parse_match(match, platform="sg2") is not None
+
+
+def _reason(match, **kw):
+    record, reason = parse_match_checked(match, **kw)
+    assert (record is None) == (reason is not None)
+    return reason
+
+
+def test_checked_valid(match):
+    record, reason = parse_match_checked(match)
+    assert record is not None and reason is None
+
+
+@pytest.mark.parametrize("mutate, expected", [
+    (lambda m: m["info"].update(queueId=440), "wrong_queue"),
+    (lambda m: m["info"]["participants"][7].update(gameEndedInEarlySurrender=True), "early_surrender"),
+    (lambda m: m["info"]["participants"][3].update(teamPosition=""), "role_missing"),
+    (lambda m: m["info"]["participants"][3].pop("teamPosition"), "role_missing"),
+    (lambda m: m["info"]["participants"][1].update(teamPosition="TOP"), "role_missing"),
+    (lambda m: m["info"].update(participants=m["info"]["participants"][:9]), "not_10_players"),
+])
+def test_checked_reasons(match, mutate, expected):
+    mutate(match)
+    assert _reason(match) == expected
+
+
+def test_checked_other_platform(match):
+    match["metadata"]["matchId"] = "OC1_711130978"
+    assert _reason(match, platform="sg2") == "other_platform"
+
+
+def test_checked_malformed():
+    assert _reason({}) == "malformed"

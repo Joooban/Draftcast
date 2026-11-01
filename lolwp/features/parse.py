@@ -23,27 +23,32 @@ def patch_key(patch: str) -> tuple[int, int]:
 
 def parse_match(match: dict, platform: str | None = None) -> MatchRecord | None:
     """`platform` (e.g. "sg2") drops matches played on other servers by the same players."""
+    return parse_match_checked(match, platform)[0]
+
+
+def parse_match_checked(match: dict, platform: str | None = None) -> tuple[MatchRecord | None, str | None]:
+    """Like parse_match, but also says why a match was dropped."""
     try:
         if platform and not match["metadata"]["matchId"].upper().startswith(platform.upper() + "_"):
-            return None
+            return None, "other_platform"
         info = match["info"]
         if info.get("queueId") != QUEUE_ID:
-            return None
+            return None, "wrong_queue"
         participants = info["participants"]
         if len(participants) != 10:
-            return None
+            return None, "not_10_players"
         if any(p.get("gameEndedInEarlySurrender") for p in participants):
-            return None
+            return None, "early_surrender"
 
         teams: dict[int, dict[str, int]] = {BLUE: {}, RED: {}}
         for p in participants:
             role = RIOT_POSITION_TO_ROLE.get(p.get("teamPosition") or "")
             side = teams.get(p.get("teamId"))
             if role is None or side is None or role in side:
-                return None
+                return None, "role_missing"
             side[role] = int(p["championId"])
         if any(set(side) != set(ROLES) for side in teams.values()):
-            return None
+            return None, "role_missing"
 
         blue_team = next(t for t in info["teams"] if t["teamId"] == BLUE)
         major, minor = info["gameVersion"].split(".")[:2]
@@ -54,6 +59,6 @@ def parse_match(match: dict, platform: str | None = None) -> MatchRecord | None:
             duration_s=int(info["gameDuration"]),
             blue={r: teams[BLUE][r] for r in ROLES},
             red={r: teams[RED][r] for r in ROLES},
-        )
+        ), None
     except (KeyError, TypeError, ValueError, StopIteration):
-        return None
+        return None, "malformed"

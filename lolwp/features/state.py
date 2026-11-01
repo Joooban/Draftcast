@@ -19,7 +19,6 @@ def state_features(match: dict, timeline: dict, minute: int = STATE_MINUTE) -> d
     for pid_str, pf in frames[minute]["participantFrames"].items():
         s = _sign(team_of.get(int(pid_str)))
         f["gold_diff"] += s * pf["totalGold"]
-        f["xp_diff"] += s * pf["xp"]
         f["cs_diff"] += s * (pf["minionsKilled"] + pf["jungleMinionsKilled"])
         f["level_diff"] += s * pf["level"]
 

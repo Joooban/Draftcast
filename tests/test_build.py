@@ -1,3 +1,5 @@
+import json
+
 import pandas as pd
 
 from lolwp.config import ROLES, STATE_FEATURES
@@ -36,9 +38,15 @@ def test_no_test_match_in_saved_stats(tmp_path):
 def test_dataset_columns_and_filters(tmp_path):
     champs = str(tmp_path / "champions.json")
     store = fill_store(str(tmp_path / "lol.db"), champs, per_patch=40)
-    build(store, champs, str(tmp_path / "data"), str(tmp_path / "art"))
+    summary = build(store, champs, str(tmp_path / "data"), str(tmp_path / "art"))
     draft = pd.read_parquet(tmp_path / "data" / "draft.parquet")
     state = pd.read_parquet(tmp_path / "data" / "state.parquet")
+    m10 = pd.read_parquet(tmp_path / "data" / "state_m10.parquet")
+    assert list(m10.columns) == list(state.columns) and list(m10.match_id) == list(state.match_id)
+    build_summary = json.loads((tmp_path / "art" / "build_summary.json").read_text(encoding="utf-8"))
+    assert sum(build_summary["dropped"].values()) == summary["dropped"]
+    assert build_summary["dropped"] == summary["dropped_by_reason"]
+    assert build_summary["patches"] == ["15.19", "15.20", "15.21"]
     role_cols = [f"{s}_{r}" for s in ("blue", "red") for r in ROLES]
     assert list(draft.columns) == ["match_id", "patch", "split", "blue_win", *DRAFT_FEATURES, *role_cols]
     assert list(state.columns) == ["match_id", "patch", "split", "blue_win", "duration_s", *STATE_FEATURES]

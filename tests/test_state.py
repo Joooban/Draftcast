@@ -21,7 +21,7 @@ def timeline():
 
 def test_diffs_at_15(match, timeline):
     f = state_features(match, timeline)
-    assert f["gold_diff"] == 1000 and f["xp_diff"] == 1000 and f["cs_diff"] == 25
+    assert f["gold_diff"] == 1000 and "xp_diff" not in f and f["cs_diff"] == 25
     assert f["level_diff"] == 0
     assert f["kills_diff"] == 1  # late kill ignored
     assert f["grubs_diff"] == 1 and f["dragons_diff"] == -1
@@ -45,3 +45,11 @@ def test_team_comes_from_match_not_participant_id(match, timeline):
         p["teamId"] = 300 - p["teamId"]
     f = state_features(match, timeline)
     assert f["gold_diff"] == -1000 and f["kills_diff"] == -1 and f["wards_placed_diff"] == 1
+
+
+def test_minute_10_reads_frame_10(match, timeline):
+    f = state_features(match, timeline, minute=10)
+    team = {p["participantId"]: p["teamId"] for p in match["info"]["participants"]}
+    frame = timeline["info"]["frames"][10]["participantFrames"]
+    gold = sum((1 if team[int(k)] == 100 else -1) * v["totalGold"] for k, v in frame.items())
+    assert f["gold_diff"] == gold and "xp_diff" not in f

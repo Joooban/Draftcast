@@ -21,7 +21,7 @@ LABELS = {
     "tag_Tank_diff": "Tanks", "tag_Fighter_diff": "Fighters", "tag_Mage_diff": "Mages",
     "tag_Assassin_diff": "Assassins", "tag_Marksman_diff": "Marksmen", "tag_Support_diff": "Supports",
     "attack_diff": "Physical damage", "magic_diff": "Magic damage",
-    "gold_diff": "Gold lead at 15:00", "xp_diff": "XP lead at 15:00", "cs_diff": "CS lead at 15:00",
+    "gold_diff": "Gold lead at 15:00", "cs_diff": "CS lead at 15:00",
     "level_diff": "Level lead at 15:00", "kills_diff": "Kill lead", "dragons_diff": "Dragons",
     "grubs_diff": "Voidgrubs", "towers_diff": "Towers",
     "plates_diff": "Turret plates", "wards_placed_diff": "Wards placed", "wards_killed_diff": "Wards cleared",

@@ -18,7 +18,6 @@ RIOT_POSITION_TO_ROLE: dict[str, str] = {
 
 STATE_FEATURES: list[str] = [
     "gold_diff",
-    "xp_diff",
     "cs_diff",
     "level_diff",
     "kills_diff",
@@ -35,7 +34,6 @@ STATE_FEATURES: list[str] = [
 
 STATE_RANGES: dict[str, tuple[int, int]] = {
     "gold_diff": (-15000, 15000),
-    "xp_diff": (-15000, 15000),
     "cs_diff": (-200, 200),
     "level_diff": (-20, 20),
     "kills_diff": (-30, 30),
@@ -55,6 +53,7 @@ QUEUE_ID = 420
 MATCH_WINDOW_DAYS = 42
 MIN_DURATION_S = 960
 STATE_MINUTE = 15
+STATE_MINUTES = (10, 15)  # the app predicts at either; both need games of >= 16 min
 
 PRIOR_GAMES = 20
 OOF_FOLDS = 5

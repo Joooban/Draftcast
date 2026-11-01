@@ -24,7 +24,6 @@ export type PartialTeam = Partial<Record<Role, number>>
 
 export const STATE_FEATURES = [
   'gold_diff',
-  'xp_diff',
   'cs_diff',
   'level_diff',
   'kills_diff',
@@ -43,7 +42,6 @@ export type GameState = Record<StateFeature, number>
 
 export const STATE_RANGES: Record<StateFeature, [number, number]> = {
   gold_diff: [-15000, 15000],
-  xp_diff: [-15000, 15000],
   cs_diff: [-200, 200],
   level_diff: [-20, 20],
   kills_diff: [-30, 30],
@@ -60,7 +58,6 @@ export const STATE_RANGES: Record<StateFeature, [number, number]> = {
 
 export const STATE_LABELS: Record<StateFeature, string> = {
   gold_diff: 'Gold lead',
-  xp_diff: 'XP lead',
   cs_diff: 'CS lead',
   level_diff: 'Total level lead',
   kills_diff: 'Kill lead',
@@ -77,7 +74,6 @@ export const STATE_LABELS: Record<StateFeature, string> = {
 
 export const STATE_STEPS: Partial<Record<StateFeature, number>> = {
   gold_diff: 100,
-  xp_diff: 100,
 }
 
 export const emptyState = (): GameState =>
