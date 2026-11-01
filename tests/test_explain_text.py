@@ -35,3 +35,17 @@ def test_verdict():
     assert verdict(0.52, "Blue leads by 100 gold") == "Toss-up: Blue 52%"
     assert verdict(0.40, None) == "Red has a slight edge: 60%"
     assert verdict(0.10, "The draft leans Red") == "Red is a strong favorite: 90%, mostly because the draft leans Red"
+
+
+def test_draft_only_caps_strength():
+    assert strength(0.68, draft_only=True) == "slight edge"
+    assert strength(0.52, draft_only=True) == "toss-up"
+    assert verdict(0.68, None, draft_only=True) == "Blue has a slight edge: 68%"
+
+
+def test_reasons_skip_sign_mismatch():
+    from lolwp.api.explain_text import pick_reasons
+
+    # cs_diff = -1 sits above the training mean, so its effect helps Blue: "Red leads" would contradict it.
+    picked = pick_reasons([("gold_diff", 2000, 9.0), ("cs_diff", -1, 0.1), ("dragons_diff", -1, -4.0)])
+    assert [r.text for r in picked] == ["Blue leads by 2,000 gold", "Red has 1 more dragon"]

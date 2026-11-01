@@ -7,6 +7,7 @@ quoted to the user belongs to the model that predicted), and cached.
 """
 import json
 import os
+import threading
 from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Literal
@@ -42,17 +43,29 @@ class ModelBank:
         self._rows: dict[int, pd.DataFrame] = {}
         self._cache: OrderedDict[tuple, FittedModel] = OrderedDict()
         self.fits = 0
+        # FastAPI runs sync endpoints in a threadpool; one lock keeps the cache and row loads consistent.
+        # Holding it during a fit (~0.2 s) is fine for this app's traffic.
+        self._lock = threading.Lock()
 
     def rows(self, minute: int) -> pd.DataFrame:
+        with self._lock:
+            return self._load_rows(minute)
+
+    def _load_rows(self, minute: int) -> pd.DataFrame:
         if minute not in self._rows:
             self._rows[minute] = pd.read_parquet(os.path.join(self.dir, f"state_rows_m{minute}.parquet"))
         return self._rows[minute]
 
     def get(self, kind: Kind, minute: int, features: tuple[str, ...]) -> FittedModel:
+        with self._lock:
+            return self._get(kind, minute, features)
+
+    def _get(self, kind: Kind, minute: int, features: tuple[str, ...]) -> FittedModel:
         key = (kind, minute, features)
-        if key in self._cache:
-            self._cache.move_to_end(key)
-            return self._cache[key]
+        hit = self._cache.get(key)
+        if hit is not None:
+            self._cache[key] = self._cache.pop(key, hit)  # mark as most recently used
+            return hit
         full = STATE_FEATURES if kind == "state" else COMBINED_FEATURES
         name = model_name(kind, minute)
         if list(features) == full:
@@ -61,7 +74,7 @@ class ModelBank:
             m = self.metrics["models"][name]
             fitted = FittedModel(model, list(full), m["auc"], m["accuracy"], self.metrics["calibration"][name])
         else:
-            rows = self.rows(minute)
+            rows = self._load_rows(minute)
             tr, te = rows[rows.split == "train"], rows[rows.split == "test"]
             cols = list(features)
             model = make_lr().fit(tr[cols], tr.blue_win)

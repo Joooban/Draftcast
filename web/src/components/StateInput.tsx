@@ -1,5 +1,5 @@
 import type { FirstStat, FirstValue, LiveEntry, PlayerStat, Side, TeamStat } from '../live'
-import { FIRST_STATS, SIDES, TEAM_STATS } from '../live'
+import { FIRST_STATS, SIDES, TEAM_STATS, isInvalid } from '../live'
 import type { Minute } from '../types'
 import { MINUTES, ROLES, ROLE_NAMES, STATE_LABELS } from '../types'
 
@@ -36,9 +36,12 @@ const FIRST_OPTIONS: { value: FirstValue; label: string; cls: string }[] = [
 const SIDE_NAMES: Record<Side, string> = { blue: 'Blue', red: 'Red' }
 
 function NumberBox({ value, label, onChange }: { value: string; label: string; onChange: (v: string) => void }) {
+  const invalid = isInvalid(value)
   return (
     <input
-      className="num"
+      className={invalid ? 'num invalid' : 'num'}
+      aria-invalid={invalid}
+      title={invalid ? 'Whole numbers only (commas are fine)' : undefined}
       type="text"
       inputMode="numeric"
       autoComplete="off"
@@ -59,6 +62,11 @@ export default function StateInput({ entry, onChange, minute, onMinute }: Props)
   const setTeam = (side: Side, stat: TeamStat, v: string) =>
     onChange({ ...entry, team: { ...entry.team, [side]: { ...entry.team[side], [stat]: v } } })
   const setFirst = (f: FirstStat, v: FirstValue) => onChange({ ...entry, firsts: { ...entry.firsts, [f]: v } })
+
+  const invalidCount = [
+    ...SIDES.flatMap((side) => ROLES.flatMap((r) => Object.values(entry.players[side][r]))),
+    ...SIDES.flatMap((side) => Object.values(entry.team[side])),
+  ].filter(isInvalid).length
 
   return (
     <div className="live">
@@ -147,6 +155,13 @@ export default function StateInput({ entry, onChange, minute, onMinute }: Props)
           </tbody>
         </table>
       </div>
+
+      {invalidCount > 0 && (
+        <p className="error small" role="alert">
+          {invalidCount} box{invalidCount === 1 ? '' : 'es'} {invalidCount === 1 ? "isn't a" : "aren't"} whole number
+          {invalidCount === 1 ? '' : 's'} (outlined in red). They count as unknown until fixed.
+        </p>
+      )}
 
       <div className="firsts">
         {FIRST_STATS.map((f) => (

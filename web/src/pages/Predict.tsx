@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { getChampions, predict } from '../api'
 import DraftInput from '../components/DraftInput'
+import { createLatest } from '../latest'
 import ResultPanel from '../components/ResultPanel'
 import StateInput from '../components/StateInput'
 import type { LiveEntry, Side } from '../live'
@@ -35,6 +36,7 @@ export default function Predict() {
   const [result, setResult] = useState<PredictResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const latest = useRef(createLatest()).current
 
   useEffect(() => {
     getChampions().then(setChampions, (e: Error) => setLoadError(e.message))
@@ -42,6 +44,7 @@ export default function Predict() {
 
   // Any input change makes the shown result stale, so it goes.
   const changed = () => {
+    latest.invalidate() // a response still in flight is for the old inputs
     setResult(null)
     setError(null)
   }
@@ -69,13 +72,17 @@ export default function Predict() {
       req.red = red as Team
     }
     if (needsState) req.state = state
+    const token = latest.next()
     setBusy(true)
     setError(null)
     try {
-      setResult(await predict(req))
+      const res = await predict(req)
+      if (latest.isCurrent(token)) setResult(res)
     } catch (err) {
-      setResult(null)
-      setError((err as Error).message)
+      if (latest.isCurrent(token)) {
+        setResult(null)
+        setError((err as Error).message)
+      }
     } finally {
       setBusy(false)
     }

@@ -6,9 +6,9 @@ import joblib
 import pandas as pd
 
 from lolwp import champions as champ_data
-from lolwp.api.explain_text import reason_text, strength, verdict
-from lolwp.api.schemas import (CalibrationBin, ContributionOut, PredictRequest, PredictResponse, Reason,
-                               Reliability, Split)
+from lolwp.api.explain_text import pick_reasons, strength, verdict
+from lolwp.api.schemas import (CalibrationBin, ContributionOut, PredictRequest, PredictResponse, Reliability,
+                               Split)
 from lolwp.config import ROLES, STATE_FEATURES, STATE_MINUTES, STATE_RANGES
 from lolwp.features.draft import DRAFT_FEATURES, draft_features
 from lolwp.features.draft_stats import DraftStats
@@ -30,7 +30,6 @@ LABELS = {
     "first_blood_blue": "First blood", "first_dragon_blue": "First dragon", "first_tower_blue": "First tower",
     "draft_logit": "Draft",
 }
-MAX_REASONS = 5
 
 
 class ValidationError(ValueError):
@@ -117,21 +116,16 @@ class Predictor:
 
         baseline, prob, contribs = explain(fitted.model, x)
         omitted = sorted(set(STATE_FEATURES) - set(known)) if state is not None else []
-        reasons = []
-        for c in contribs:
-            text = reason_text(c.feature, float(x[c.feature].iloc[0]))
-            if text:
-                reasons.append(Reason(text=text, value_pct=c.value_pct))
-            if len(reasons) == MAX_REASONS:
-                break
+        reasons = pick_reasons([(c.feature, float(x[c.feature].iloc[0]), c.value_pct) for c in contribs])
+        draft_only = req.mode == "draft"
         # The verdict's "mostly because" must favour the side that's ahead.
         top = next((r.text for r in reasons if (r.value_pct > 0) == (prob >= 0.5)), None)
 
         return PredictResponse(
             probability=prob,
             baseline=baseline,
-            verdict=verdict(prob, top),
-            strength=strength(prob),
+            verdict=verdict(prob, top, draft_only),
+            strength=strength(prob, draft_only),
             contributions=[ContributionOut(feature=c.feature, label=LABELS.get(c.feature, c.feature),
                                            value_pct=c.value_pct, logit=c.logit,
                                            value=float(state[c.feature]) if state and c.feature in state else None)

@@ -54,6 +54,12 @@ export default function ResultPanel({ result, side }: Props) {
         Points are the change in Blue's win chance. {result.reliability.text}
       </p>
 
+      {result.omitted.length > 0 && (
+        <p className="muted small">
+          Left out (unknown): {result.omitted.map((f: StateFeature) => STATE_LABELS[f]).join(', ')}.
+        </p>
+      )}
+
       <details className="full-reasoning">
         <summary>Show the full reasoning</summary>
 
@@ -114,8 +120,7 @@ export default function ResultPanel({ result, side }: Props) {
 
         {result.omitted.length > 0 && (
           <p className="muted small">
-            Left out (unknown): {result.omitted.map((f: StateFeature) => STATE_LABELS[f]).join(', ')}. The prediction
-            uses a model trained without them, at {result.minute}:00.
+            The prediction uses a model trained without the unknown fields, at {result.minute}:00.
           </p>
         )}
       </details>

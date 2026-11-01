@@ -1,6 +1,7 @@
 // No frontend test runner here: `npm run check:live` runs this with Node's type stripping,
 // and `tsc -b` type-checks it with the rest of src.
-import { emptyEntry, toState } from './live.ts'
+import { createLatest } from './latest.ts'
+import { emptyEntry, isInvalid, toState } from './live.ts'
 import type { LiveEntry } from './live.ts'
 import { ROLES } from './types.ts'
 
@@ -46,5 +47,20 @@ const firsts = emptyEntry()
 firsts.firsts.first_blood_blue = 'red'
 firsts.firsts.first_tower_blue = 'none'
 eq('firsts', toState(firsts), { first_blood_blue: -1, first_tower_blue: 0 })
+
+// A box with text that isn't a count is flagged, so it isn't silently treated as unknown.
+eq('blank is fine', isInvalid(''), false)
+eq('count is fine', isInvalid('1,200'), false)
+eq('4.1k is invalid', isInvalid('4.1k'), true)
+eq('minus is invalid', isInvalid('-'), true)
+
+// Only the newest request may show its result; an input change also invalidates an in-flight one.
+const latest = createLatest()
+const first = latest.next()
+eq('first is current', latest.isCurrent(first), true)
+latest.invalidate()
+eq('invalidated', latest.isCurrent(first), false)
+const second = latest.next()
+eq('newer request wins', [latest.isCurrent(first), latest.isCurrent(second)], [false, true])
 
 console.log('live ok')

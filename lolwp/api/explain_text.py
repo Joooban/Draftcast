@@ -3,7 +3,10 @@
 Every sentence names the side a factor favours and the real number behind it. A factor whose
 value is 0 (even, or no difference) gets no sentence, so nothing is credited for being level.
 """
+from lolwp.api.schemas import Reason
 from lolwp.config import ROLES
+
+MAX_REASONS = 5
 
 # feature -> (verb phrase, singular noun, plural noun); "{S} {verb} {n} {noun}"
 _COUNTS = {
@@ -24,11 +27,12 @@ _TAGS = {"Tank": ("tank", "tanks"), "Fighter": ("fighter", "fighters"), "Mage": 
 _ROLE_WORDS = {"top": "top", "jungle": "jungle", "mid": "mid", "bot": "bot", "support": "support"}
 
 
-def strength(p: float) -> str:
+def strength(p: float, draft_only: bool = False) -> str:
+    """Draft-only predictions are near a coin flip, so they never get stronger than "slight edge"."""
     lead = max(p, 1 - p)
     if lead < 0.55:
         return "toss-up"
-    if lead < 0.65:
+    if lead < 0.65 or draft_only:
         return "slight edge"
     if lead < 0.80:
         return "favored"
@@ -76,10 +80,27 @@ def reason_text(feature: str, value: float) -> str | None:
 _PHRASES = {"slight edge": "has a slight edge", "favored": "is favored", "strong favorite": "is a strong favorite"}
 
 
-def verdict(p: float, top_reason: str | None) -> str:
+def pick_reasons(factors: list[tuple[str, float, float]], limit: int = MAX_REASONS) -> list[Reason]:
+    """Sentences for (feature, input value, effect in pts), largest effect first.
+
+    Effects are measured against the average training game, so a small input can push the other
+    way from what its sign says (CS -1 is above the average CS diff and helps Blue). Such a factor
+    gets no sentence: "Red leads by 1 CS" next to a Blue effect would contradict itself.
+    """
+    out = []
+    for feature, value, pts in factors:
+        text = reason_text(feature, value)
+        if text and (value > 0) == (pts > 0):
+            out.append(Reason(text=text, value_pct=pts))
+        if len(out) == limit:
+            break
+    return out
+
+
+def verdict(p: float, top_reason: str | None, draft_only: bool = False) -> str:
     """'Blue is favored: 68%, mostly because …'. `top_reason` should favour the leading side."""
     side, pct = ("Blue", p) if p >= 0.5 else ("Red", 1 - p)
-    word = strength(p)
+    word = strength(p, draft_only)
     if word == "toss-up":
         return f"Toss-up: {side} {pct:.0%}"
     line = f"{side} {_PHRASES[word]}: {pct:.0%}"

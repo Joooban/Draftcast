@@ -45,6 +45,11 @@ export function parseCount(text: string): number | null {
   return /^\d+$/.test(t) ? Number(t) : null
 }
 
+/** Text typed into a box that isn't blank and isn't a count: shown as an error, not silently dropped. */
+export function isInvalid(text: string): boolean {
+  return text.trim() !== '' && parseCount(text) === null
+}
+
 export function toState(e: LiveEntry): Partial<Record<StateFeature, number>> {
   const out: Partial<Record<StateFeature, number>> = {}
   for (const stat of Object.keys(PLAYER_FEATURE) as PlayerStat[]) {

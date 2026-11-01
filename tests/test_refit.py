@@ -38,3 +38,20 @@ def test_minute_10_uses_m10_rows(bank, monkeypatch):
     monkeypatch.setattr(refit.joblib, "load", lambda p: loaded.append(p) or real(p))
     bank.get("combined", 10, tuple(COMBINED_FEATURES))
     assert loaded and loaded[0].replace("\\", "/").endswith("combined_m10_model.joblib")
+
+
+def test_cache_survives_eviction_between_check_and_use(bank):
+    # Under FastAPI's threadpool another request can evict a key right after this one sees it.
+    from collections import OrderedDict
+
+    class EvictedAfterCheck(OrderedDict):
+        def __contains__(self, key):
+            found = super().__contains__(key)
+            if found:
+                self.pop(key)
+            return found
+
+    first = bank.get("state", 15, ("gold_diff",))
+    bank._cache = EvictedAfterCheck(bank._cache)
+    again = bank.get("state", 15, ("gold_diff",))
+    assert again.features == first.features
