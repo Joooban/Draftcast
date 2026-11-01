@@ -68,6 +68,7 @@ export default function ChampionPicker({ champions, value, onChange, disabledIds
             onKeyDown={(e) => {
               if (e.key === 'Escape') setOpen(false)
               if (e.key === 'Enter') {
+                e.preventDefault() // picks the champion; must not also submit the predict form
                 const first = matches.find((c) => !disabledIds.has(c.id))
                 if (first) choose(first)
               }

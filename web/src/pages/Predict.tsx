@@ -1,15 +1,24 @@
 import { useEffect, useState } from 'react'
+import type { FormEvent } from 'react'
 import { getChampions, predict } from '../api'
 import DraftInput from '../components/DraftInput'
 import ResultPanel from '../components/ResultPanel'
 import StateInput from '../components/StateInput'
-import type { Champion, GameState, Mode, PartialTeam, PredictRequest, PredictResponse, Role, Team } from '../types'
-import { ROLES, emptyState } from '../types'
+import type { LiveEntry, Side } from '../live'
+import { emptyEntry, toState } from '../live'
+import type { Champion, Minute, Mode, PartialTeam, PredictRequest, PredictResponse, Role, Team } from '../types'
+import { ROLES } from '../types'
 
 const MODES: { id: Mode; label: string }[] = [
   { id: 'draft', label: 'Draft' },
   { id: 'state', label: 'Game state' },
   { id: 'both', label: 'Both' },
+]
+
+const SIDE_OPTIONS: { id: Side | null; label: string }[] = [
+  { id: 'blue', label: 'Blue' },
+  { id: 'red', label: 'Red' },
+  { id: null, label: 'Neither' },
 ]
 
 const isFull = (t: PartialTeam): t is Team => ROLES.every((r) => t[r] !== undefined)
@@ -20,7 +29,9 @@ export default function Predict() {
   const [mode, setMode] = useState<Mode>('draft')
   const [blue, setBlue] = useState<PartialTeam>({})
   const [red, setRed] = useState<PartialTeam>({})
-  const [state, setState] = useState<GameState>(emptyState)
+  const [entry, setEntry] = useState<LiveEntry>(emptyEntry)
+  const [minute, setMinute] = useState<Minute>(15)
+  const [side, setSide] = useState<Side | null>(null)
   const [result, setResult] = useState<PredictResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -29,19 +40,30 @@ export default function Predict() {
     getChampions().then(setChampions, (e: Error) => setLoadError(e.message))
   }, [])
 
+  // Any input change makes the shown result stale, so it goes.
+  const changed = () => {
+    setResult(null)
+    setError(null)
+  }
+
   const needsDraft = mode !== 'state'
   const needsState = mode !== 'draft'
   const draftReady = isFull(blue) && isFull(red)
-  const ready = !needsDraft || draftReady
+  const state = toState(entry)
+  const known = Object.keys(state).length
+  const ready = (!needsDraft || draftReady) && (!needsState || known > 0)
 
-  const setPick = (side: 'blue' | 'red', role: Role, id: number | undefined) => {
+  const setPick = (team: 'blue' | 'red', role: Role, id: number | undefined) => {
     const update = (t: PartialTeam) => ({ ...t, [role]: id })
-    if (side === 'blue') setBlue(update)
+    if (team === 'blue') setBlue(update)
     else setRed(update)
+    changed()
   }
 
-  const run = async () => {
-    const req: PredictRequest = { mode }
+  const run = async (e?: FormEvent) => {
+    e?.preventDefault()
+    if (!ready || busy) return
+    const req: PredictRequest = { mode, minute }
     if (needsDraft) {
       req.blue = blue as Team
       req.red = red as Team
@@ -51,35 +73,37 @@ export default function Predict() {
     setError(null)
     try {
       setResult(await predict(req))
-    } catch (e) {
+    } catch (err) {
       setResult(null)
-      setError((e as Error).message)
+      setError((err as Error).message)
     } finally {
       setBusy(false)
     }
   }
 
-  const missing = needsDraft ? 10 - ROLES.filter((r) => blue[r] !== undefined).length - ROLES.filter((r) => red[r] !== undefined).length : 0
+  const missing = needsDraft
+    ? 10 - ROLES.filter((r) => blue[r] !== undefined).length - ROLES.filter((r) => red[r] !== undefined).length
+    : 0
 
   return (
     <div className="page">
       <h1>Who wins this game?</h1>
       <p className="lead">
-        Pick a draft, set the game state at 15:00, or both. The model returns Blue's win probability and shows what
-        moved it.
+        Pick a draft, type the game state at 10:00 or 15:00, or both. Draftcast returns each team's win chance and
+        explains what moved it.
       </p>
 
       <div className="tabs" role="tablist">
         {MODES.map((m) => (
           <button
             key={m.id}
+            type="button"
             role="tab"
             aria-selected={mode === m.id}
             className={mode === m.id ? 'tab active' : 'tab'}
             onClick={() => {
               setMode(m.id)
-              setResult(null)
-              setError(null)
+              changed()
             }}
           >
             {m.label}
@@ -89,19 +113,70 @@ export default function Predict() {
 
       {loadError && <p className="error">Couldn't load champions: {loadError}</p>}
 
-      {needsDraft && <DraftInput champions={champions} blue={blue} red={red} onChange={setPick} />}
-      {needsState && <StateInput state={state} onChange={setState} />}
+      <form onSubmit={run} className="predict-form">
+        {needsDraft && <DraftInput champions={champions} blue={blue} red={red} onChange={setPick} />}
+        {needsState && (
+          <StateInput
+            entry={entry}
+            onChange={(e) => {
+              setEntry(e)
+              changed()
+            }}
+            minute={minute}
+            onMinute={(m) => {
+              setMinute(m)
+              changed()
+            }}
+          />
+        )}
 
-      <div className="actions">
-        <button className="primary" disabled={!ready || busy} onClick={run}>
-          {busy ? 'Predicting…' : 'Predict'}
-        </button>
-        {needsDraft && !draftReady && <span className="muted small">{missing} pick{missing === 1 ? '' : 's'} left</span>}
-      </div>
+        <div className="actions">
+          <button className="primary" type="submit" disabled={!ready || busy}>
+            {busy ? 'Predicting…' : 'Predict'}
+          </button>
+          {needsState && (
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => {
+                setEntry(emptyEntry())
+                changed()
+              }}
+            >
+              Reset game state
+            </button>
+          )}
+          <div className="seg side-toggle" role="radiogroup" aria-label="I'm on">
+            <span className="small muted seg-label">I'm on</span>
+            {SIDE_OPTIONS.map((o) => (
+              <button
+                key={o.label}
+                type="button"
+                role="radio"
+                aria-checked={side === o.id}
+                className={side === o.id ? `seg-btn active ${o.id ?? ''}` : 'seg-btn'}
+                onClick={() => setSide(o.id)}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+          {needsDraft && !draftReady && (
+            <span className="muted small">
+              {missing} pick{missing === 1 ? '' : 's'} left
+            </span>
+          )}
+          {needsState && known === 0 && <span className="muted small">Enter at least one game-state value</span>}
+        </div>
+      </form>
 
-      {error && <p className="error" role="alert">{error}</p>}
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
 
-      {result && <ResultPanel result={result} />}
+      {result && <ResultPanel result={result} side={side} />}
     </div>
   )
 }

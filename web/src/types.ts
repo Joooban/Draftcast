@@ -72,32 +72,45 @@ export const STATE_LABELS: Record<StateFeature, string> = {
   first_tower_blue: 'First tower',
 }
 
-export const STATE_STEPS: Partial<Record<StateFeature, number>> = {
-  gold_diff: 100,
-}
-
-export const emptyState = (): GameState =>
-  Object.fromEntries(STATE_FEATURES.map((f) => [f, 0])) as GameState
+export type Minute = 10 | 15
+export const MINUTES: Minute[] = [10, 15]
 
 export interface PredictRequest {
   mode: Mode
+  minute: Minute
   blue?: Team
   red?: Team
-  state?: GameState
+  // Only the known fields; anything left out is treated as unknown.
+  state?: Partial<GameState>
 }
 
 export interface Contribution {
   feature: string
   label: string
   value_pct: number
+  value: number | null
+  logit: number
 }
+
+export interface Reason {
+  text: string
+  value_pct: number
+}
+
+export type Strength = 'toss-up' | 'slight edge' | 'favored' | 'strong favorite'
 
 export interface PredictResponse {
   probability: number
   baseline: number
+  verdict: string
+  strength: Strength
   contributions: Contribution[]
-  reasons: string[]
+  reasons: Reason[]
   split: { draft_pct: number; state_pct: number } | null
+  omitted: StateFeature[]
+  calibration: { lo: number; hi: number; win_rate: number; n: number } | null
+  reliability: { auc: number; accuracy: number; text: string }
+  minute: Minute
 }
 
 export interface ModelMetrics {

@@ -1,111 +1,175 @@
-import { useState } from 'react'
-import type { GameState, StateFeature } from '../types'
-import { STATE_FEATURES, STATE_LABELS, STATE_RANGES, STATE_STEPS } from '../types'
+import type { FirstStat, FirstValue, LiveEntry, PlayerStat, Side, TeamStat } from '../live'
+import { FIRST_STATS, SIDES, TEAM_STATS } from '../live'
+import type { Minute } from '../types'
+import { MINUTES, ROLES, ROLE_NAMES, STATE_LABELS } from '../types'
 
 interface Props {
-  state: GameState
-  onChange: (state: GameState) => void
+  entry: LiveEntry
+  onChange: (entry: LiveEntry) => void
+  minute: Minute
+  onMinute: (minute: Minute) => void
 }
 
-const FIRSTS = new Set<StateFeature>(['first_blood_blue', 'first_dragon_blue', 'first_tower_blue'])
-const FIRST_OPTIONS: { value: number; label: string; cls: string }[] = [
-  { value: 1, label: 'Blue', cls: 'blue' },
-  { value: 0, label: 'None', cls: '' },
-  { value: -1, label: 'Red', cls: 'red' },
+const PLAYER_STATS: { stat: PlayerStat; label: string }[] = [
+  { stat: 'level', label: 'Level' },
+  { stat: 'cs', label: 'CS' },
+  { stat: 'gold', label: 'Gold' },
 ]
 
-function describe(v: number): string {
-  if (v === 0) return 'Even'
-  return `${v > 0 ? 'Blue' : 'Red'} +${Math.abs(v).toLocaleString()}`
+const TEAM_LABELS: Record<TeamStat, string> = {
+  kills: 'Kills',
+  dragons: 'Dragons',
+  towers: 'Towers',
+  grubs: 'Voidgrubs',
+  plates: 'Turret plates',
+  wards_placed: 'Wards placed',
+  wards_killed: 'Wards cleared',
 }
 
-const clamp = (v: number, [min, max]: [number, number]) => Math.min(max, Math.max(min, Math.round(v)))
+const FIRST_OPTIONS: { value: FirstValue; label: string; cls: string }[] = [
+  { value: 'unknown', label: '?', cls: '' },
+  { value: 'blue', label: 'Blue', cls: 'blue' },
+  { value: 'none', label: 'None', cls: '' },
+  { value: 'red', label: 'Red', cls: 'red' },
+]
 
-// Typed entry for use mid-game: keeps the raw text while typing (so "-" or "" are allowed),
-// and commits any number it can parse, clamped to the feature's range.
-function NumberBox({ feature, value, onCommit }: { feature: StateFeature; value: number; onCommit: (v: number) => void }) {
-  // null when not editing, so the box follows the slider; the raw text only lives while focused.
-  const [text, setText] = useState<string | null>(null)
-  const range = STATE_RANGES[feature]
-  const commit = (raw: string) => {
-    const n = Number(raw.replace(/[,\s]/g, ''))
-    if (raw.trim() !== '' && Number.isFinite(n)) onCommit(clamp(n, range))
-  }
+const SIDE_NAMES: Record<Side, string> = { blue: 'Blue', red: 'Red' }
+
+function NumberBox({ value, label, onChange }: { value: string; label: string; onChange: (v: string) => void }) {
   return (
     <input
       className="num"
       type="text"
       inputMode="numeric"
-      aria-label={`${STATE_LABELS[feature]}, Blue minus Red`}
-      value={text ?? String(value)}
-      onFocus={(e) => {
-        setText(String(value))
-        e.target.select()
-      }}
-      onChange={(e) => {
-        setText(e.target.value)
-        commit(e.target.value)
-      }}
-      onBlur={() => setText(null)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
-      }}
+      autoComplete="off"
+      aria-label={label}
+      value={value}
+      onFocus={(e) => e.target.select()}
+      onChange={(e) => onChange(e.target.value)}
     />
   )
 }
 
-export default function StateInput({ state, onChange }: Props) {
-  const set = (f: StateFeature, v: number) => onChange({ ...state, [f]: v })
+export default function StateInput({ entry, onChange, minute, onMinute }: Props) {
+  const setPlayer = (side: Side, role: (typeof ROLES)[number], stat: PlayerStat, v: string) =>
+    onChange({
+      ...entry,
+      players: { ...entry.players, [side]: { ...entry.players[side], [role]: { ...entry.players[side][role], [stat]: v } } },
+    })
+  const setTeam = (side: Side, stat: TeamStat, v: string) =>
+    onChange({ ...entry, team: { ...entry.team, [side]: { ...entry.team[side], [stat]: v } } })
+  const setFirst = (f: FirstStat, v: FirstValue) => onChange({ ...entry, firsts: { ...entry.firsts, [f]: v } })
+
   return (
-    <div className="state-grid">
-      <p className="muted small full">
-        Values at 15:00, Blue minus Red. Drag a slider or type a number: positive = Blue ahead, negative = Red ahead
-        (e.g. -1500 when Red leads by 1,500 gold). Tab moves to the next box.
-      </p>
-      {STATE_FEATURES.map((f) => {
-        if (FIRSTS.has(f)) {
-          return (
-            <div key={f} className="slider">
-              <span className="slider-head">{STATE_LABELS[f]}</span>
-              <div className="seg" role="radiogroup" aria-label={STATE_LABELS[f]}>
-                {FIRST_OPTIONS.map((o) => (
-                  <button
-                    key={o.value}
-                    type="button"
-                    role="radio"
-                    aria-checked={state[f] === o.value}
-                    className={state[f] === o.value ? `seg-btn active ${o.cls}` : 'seg-btn'}
-                    onClick={() => set(f, o.value)}
-                  >
-                    {o.label}
-                  </button>
+    <div className="live">
+      <div className="live-head">
+        <div className="seg" role="radiogroup" aria-label="Game time">
+          {MINUTES.map((m) => (
+            <button
+              key={m}
+              type="button"
+              role="radio"
+              aria-checked={minute === m}
+              className={minute === m ? 'seg-btn active' : 'seg-btn'}
+              onClick={() => onMinute(m)}
+            >
+              At {m}:00
+            </button>
+          ))}
+        </div>
+        <p className="muted small">
+          Type what the scoreboard shows. Leave a box empty if you can't see it: the model then works without that
+          number instead of assuming it's even.
+        </p>
+      </div>
+
+      <div className="table-scroll">
+        <table className="entry">
+          <caption>Players</caption>
+          <thead>
+            <tr>
+              <th scope="col">Role</th>
+              {SIDES.map((side) =>
+                PLAYER_STATS.map(({ stat, label }) => (
+                  <th key={`${side}-${stat}`} scope="col" className={side}>
+                    {SIDE_NAMES[side]} {label.toLowerCase()}
+                  </th>
+                )),
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {ROLES.map((role) => (
+              <tr key={role}>
+                <th scope="row">{ROLE_NAMES[role]}</th>
+                {SIDES.map((side) =>
+                  PLAYER_STATS.map(({ stat, label }) => (
+                    <td key={`${side}-${stat}`} data-label={`${SIDE_NAMES[side]} ${label.toLowerCase()}`}>
+                      <NumberBox
+                        value={entry.players[side][role][stat]}
+                        label={`${SIDE_NAMES[side]} ${ROLE_NAMES[role].toLowerCase()} ${label === 'CS' ? 'CS' : label.toLowerCase()}`}
+                        onChange={(v) => setPlayer(side, role, stat, v)}
+                      />
+                    </td>
+                  )),
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="table-scroll">
+        <table className="entry entry-team">
+          <caption>Teams</caption>
+          <thead>
+            <tr>
+              <th scope="col">Stat</th>
+              <th scope="col" className="blue">Blue</th>
+              <th scope="col" className="red">Red</th>
+            </tr>
+          </thead>
+          <tbody>
+            {TEAM_STATS.map((stat) => (
+              <tr key={stat}>
+                <th scope="row">{TEAM_LABELS[stat]}</th>
+                {SIDES.map((side) => (
+                  <td key={side} data-label={SIDE_NAMES[side]}>
+                    <NumberBox
+                      value={entry.team[side][stat]}
+                      label={`${SIDE_NAMES[side]} ${TEAM_LABELS[stat].toLowerCase()}`}
+                      onChange={(v) => setTeam(side, stat, v)}
+                    />
+                  </td>
                 ))}
-              </div>
-            </div>
-          )
-        }
-        const [min, max] = STATE_RANGES[f]
-        return (
-          <div key={f} className="slider">
-            <span className="slider-head">
-              <span>{STATE_LABELS[f]}</span>
-              <span className={state[f] > 0 ? 'blue' : state[f] < 0 ? 'red' : 'muted'}>{describe(state[f])}</span>
-            </span>
-            <div className="slider-row">
-              <input
-                type="range"
-                aria-label={STATE_LABELS[f]}
-                min={min}
-                max={max}
-                step={STATE_STEPS[f] ?? 1}
-                value={state[f]}
-                onChange={(e) => set(f, Number(e.target.value))}
-              />
-              <NumberBox feature={f} value={state[f]} onCommit={(v) => set(f, v)} />
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="firsts">
+        {FIRST_STATS.map((f) => (
+          <div key={f} className="first">
+            <span className="small">{STATE_LABELS[f]}</span>
+            <div className="seg" role="radiogroup" aria-label={STATE_LABELS[f]}>
+              {FIRST_OPTIONS.map((o) => (
+                <button
+                  key={o.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={entry.firsts[f] === o.value}
+                  aria-label={o.value === 'unknown' ? 'Unknown' : o.label}
+                  className={entry.firsts[f] === o.value ? `seg-btn active ${o.cls}` : 'seg-btn'}
+                  onClick={() => setFirst(f, o.value)}
+                >
+                  {o.label}
+                </button>
+              ))}
             </div>
           </div>
-        )
-      })}
+        ))}
+      </div>
     </div>
   )
 }

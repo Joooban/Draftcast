@@ -1,11 +1,12 @@
 import { Suspense, lazy } from 'react'
+import type { Side } from '../live'
 import type { PredictResponse } from '../types'
 
 const WaterfallChart = lazy(() => import('./WaterfallChart'))
 
 const signed = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`
 
-export default function ResultPanel({ result }: { result: PredictResponse }) {
+export default function ResultPanel({ result }: { result: PredictResponse; side: Side | null }) {
   const pct = result.probability * 100
   const { split } = result
   const shareTotal = split ? Math.abs(split.draft_pct) + Math.abs(split.state_pct) : 0
@@ -20,7 +21,7 @@ export default function ResultPanel({ result }: { result: PredictResponse }) {
       <h3>Why</h3>
       <ul className="reasons">
         {result.reasons.map((r) => (
-          <li key={r}>{r}</li>
+          <li key={r.text}>{r.text}</li>
         ))}
       </ul>
 
