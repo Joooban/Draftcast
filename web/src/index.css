@@ -107,7 +107,7 @@ main { max-width: 960px; margin: 0 auto; padding: 1.5rem 16px 3rem; }
 .entry th, .entry td { padding: 0.2rem 0.3rem; text-align: left; white-space: nowrap; }
 .entry thead th { font-weight: 500; font-size: 0.8rem; }
 .entry-team { max-width: 24rem; }
-.firsts { display: grid; grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr)); gap: 0.6rem 1rem; }
+.firsts, .modes { display: grid; grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr)); gap: 0.6rem 1rem; }
 .first { display: flex; flex-direction: column; gap: 0.25rem; }
 /* Phone width: each player row becomes a small card of labelled boxes instead of a wide table. */
 @media (max-width: 600px) {

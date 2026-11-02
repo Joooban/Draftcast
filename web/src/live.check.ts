@@ -48,6 +48,28 @@ firsts.firsts.first_blood_blue = 'red'
 firsts.firsts.first_tower_blue = 'none'
 eq('firsts', toState(firsts), { first_blood_blue: -1, first_tower_blue: 0 })
 
+// Team-total mode: the two typed totals replace the per-player sum, and per-player boxes are ignored.
+const totals = filled('gold', '3000', '2500')
+totals.modes.gold = 'team'
+totals.totals.blue.gold = '15,400'
+totals.totals.red.gold = '13,100'
+eq('gold team totals', toState(totals), { gold_diff: 2300 })
+
+const oneTotal = emptyEntry()
+oneTotal.modes.cs = 'team'
+oneTotal.totals.blue.cs = '300'
+eq('one total only is unknown', toState(oneTotal), {})
+
+// Switching back keeps the typed totals but uses the player boxes again.
+totals.modes.gold = 'player'
+eq('back to per player', toState(totals), { gold_diff: 2500 })
+
+const mixed = filled('level', '9', '8')
+mixed.modes.gold = 'team'
+mixed.totals.blue.gold = '15000'
+mixed.totals.red.gold = '16000'
+eq('mixed modes', toState(mixed), { level_diff: 5, gold_diff: -1000 })
+
 // A box with text that isn't a count is flagged, so it isn't silently treated as unknown.
 eq('blank is fine', isInvalid(''), false)
 eq('count is fine', isInvalid('1,200'), false)

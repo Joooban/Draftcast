@@ -1,6 +1,7 @@
 // Live-game entry as typed from the scoreboard, and its conversion to the API's game state.
 // A blank box means "unknown": a summed stat is known only when every player's box parses,
-// and a team stat only when both teams' boxes do. Unknown fields are left out, never sent as 0.
+// and a team stat only when both teams' boxes do. Gold, CS and levels can instead be typed as
+// team totals (as a broadcast shows them); the mode picks which boxes count. Unknown fields are left out, never sent as 0.
 // Imports use .ts extensions so `npm run check:live` can run this file under Node directly.
 import type { Role, StateFeature } from './types.ts'
 import { ROLES } from './types.ts'
@@ -10,6 +11,8 @@ export const SIDES: Side[] = ['blue', 'red']
 
 export type PlayerStat = 'level' | 'cs' | 'gold'
 export type PlayerStats = Record<PlayerStat, string>
+export const PLAYER_STATS: PlayerStat[] = ['level', 'cs', 'gold']
+export type EntryMode = 'player' | 'team'
 
 export const TEAM_STATS = ['kills', 'dragons', 'towers', 'grubs', 'plates', 'wards_placed', 'wards_killed'] as const
 export type TeamStat = (typeof TEAM_STATS)[number]
@@ -20,6 +23,8 @@ export type FirstValue = 'blue' | 'none' | 'red' | 'unknown'
 
 export interface LiveEntry {
   players: Record<Side, Record<Role, PlayerStats>>
+  totals: Record<Side, PlayerStats>
+  modes: Record<PlayerStat, EntryMode>
   team: Record<Side, Record<TeamStat, string>>
   firsts: Record<FirstStat, FirstValue>
 }
@@ -34,6 +39,8 @@ const blankTeam = () => Object.fromEntries(TEAM_STATS.map((s) => [s, ''])) as Re
 export function emptyEntry(): LiveEntry {
   return {
     players: { blue: blankPlayers(), red: blankPlayers() },
+    totals: { blue: { level: '', cs: '', gold: '' }, red: { level: '', cs: '', gold: '' } },
+    modes: { level: 'player', cs: 'player', gold: 'player' },
     team: { blue: blankTeam(), red: blankTeam() },
     firsts: { first_blood_blue: 'unknown', first_dragon_blue: 'unknown', first_tower_blue: 'unknown' },
   }
@@ -52,10 +59,13 @@ export function isInvalid(text: string): boolean {
 
 export function toState(e: LiveEntry): Partial<Record<StateFeature, number>> {
   const out: Partial<Record<StateFeature, number>> = {}
-  for (const stat of Object.keys(PLAYER_FEATURE) as PlayerStat[]) {
-    const totals = SIDES.map((side) => ROLES.map((r) => parseCount(e.players[side][r][stat])))
-    if (totals.every((team) => team.every((v) => v !== null))) {
-      const [blue, red] = totals.map((team) => team.reduce<number>((s, v) => s + (v ?? 0), 0))
+  for (const stat of PLAYER_STATS) {
+    const boxes = SIDES.map((side) =>
+      e.modes[stat] === 'team' ? [e.totals[side][stat]] : ROLES.map((r) => e.players[side][r][stat]),
+    )
+    const counts = boxes.map((team) => team.map(parseCount))
+    if (counts.every((team) => team.every((v) => v !== null))) {
+      const [blue, red] = counts.map((team) => team.reduce<number>((s, v) => s + (v ?? 0), 0))
       out[PLAYER_FEATURE[stat]] = blue - red
     }
   }
