@@ -14,7 +14,7 @@ Pick a draft, or type what the scoreboard shows at 10:00 or 15:00, and Draftcast
 
 ![Screenshot of the Predict page](docs/screenshot.png) <!-- add after deploying -->
 
-**Live app:** TBD (Render free tier: the first load can take ~30 s while it wakes up.)
+**Live app:** https://draftcast.onrender.com (Render free tier: the first load can take ~30 s while it wakes up.)
 
 ## Data
 
